@@ -1,0 +1,1612 @@
+{
+  "meta": {
+    "app": "LINGUA/OS",
+    "version": "2.1.0",
+    "language": "multi",
+    "curriculum": "English · Türkçe · Dansk",
+    "mobile_ready": true,
+    "themes": [
+      "Dark Glass",
+      "Cyberpunk Neon",
+      "Hacker Mono",
+      "Nordic Minimal"
+    ],
+    "import_tabs": [
+      "vocab",
+      "lessons",
+      "stories"
+    ],
+    "offline_first": true
+  },
+  "default_language": "en",
+  "languages": {
+    "en": {
+      "code": "en",
+      "label": "English",
+      "native": "English",
+      "level": "A2–B1",
+      "lessons": [
+        {
+          "id": 1,
+          "slug": "present-perfect-vs-past-simple",
+          "module": "GRAMMAR // 01",
+          "level": "A2–B1",
+          "duration": "20–25 мин",
+          "title": "Present Perfect vs Past Simple",
+          "title_parts": [
+            "Present Perfect",
+            "vs Past Simple"
+          ],
+          "subtitle": "Одно событие — два взгляда. Научись выбирать время по смыслу, а не по привычке.",
+          "description": "Главный грамматический баг уровня A2–B1: смешивать закрытое прошлое с опытом, который до сих пор влияет на настоящее. Разберём модель, поймаем три ловушки, прочитаем историю, напишем письмо и закрепим всё финальным тестом.",
+          "hero_check": {
+            "bad": "I have seen him yesterday.",
+            "error": "TIME_ANCHOR_CONFLICT",
+            "pointer": "yesterday → Past Simple",
+            "good": "I saw him yesterday.",
+            "result": "1 rule applied · exit code 0"
+          },
+          "badge": "CORE",
+          "blocks": [
+            {
+              "type": "theory",
+              "nav_label": "Модель",
+              "eyebrow": "01 · CORE MODEL",
+              "title": "Два взгляда на одно событие",
+              "terminal_label": "time_anchor.rule",
+              "rule_lines": [
+                {
+                  "tone": "cyan",
+                  "prompt": "PAST SIMPLE",
+                  "text": "событие закрыто · точка во времени названа"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "PRESENT PERFECT",
+                  "text": "результат актуален сейчас · точка не названа"
+                }
+              ],
+              "formulas": [
+                {
+                  "label": "Past Simple",
+                  "structure": "S + V2 / S + did + V1",
+                  "example": "I saw Daniel last Friday.",
+                  "note": "Конкретный момент в прошлом"
+                },
+                {
+                  "label": "Present Perfect",
+                  "structure": "S + have / has + V3",
+                  "example": "I have seen Daniel recently.",
+                  "note": "Опыт или результат к настоящему"
+                }
+              ],
+              "tip": "Правило-предохранитель: если в предложении есть yesterday, last week, in 2019 или two days ago — Present Perfect почти всегда ставит ошибку.",
+              "content": "Past Simple отвечает на вопрос «когда это случилось?». Present Perfect — на вопрос «что это значит для меня сейчас?». Одно и то же событие можно описать двумя способами, но фокус будет разным. И именно фокус выбирает время."
+            },
+            {
+              "type": "theory",
+              "nav_label": "Ловушки",
+              "eyebrow": "02 · ERROR PATTERNS",
+              "title": "Три ловушки, которые ломают время",
+              "terminal_label": "warnings.log",
+              "rule_lines": [
+                {
+                  "tone": "red",
+                  "prompt": "✕ BAD",
+                  "text": "I have seen him yesterday."
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "✓ FIX",
+                  "text": "I saw him yesterday."
+                },
+                {
+                  "tone": "red",
+                  "prompt": "✕ BAD",
+                  "text": "When have you arrived?"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "✓ FIX",
+                  "text": "When did you arrive?"
+                }
+              ],
+              "mistakes": [
+                {
+                  "bad": "I have lost my keys yesterday.",
+                  "good": "I lost my keys yesterday.",
+                  "why": "yesterday прибивает событие к конкретной точке. Present Perfect так не умеет."
+                },
+                {
+                  "bad": "When have you finished the project?",
+                  "good": "When did you finish the project?",
+                  "why": "when просит точное время. Это территория Past Simple."
+                },
+                {
+                  "bad": "I haven't seen him last week.",
+                  "good": "I didn't see him last week.",
+                  "why": "last week — закрытый период. Отрицание не делает его открытым."
+                }
+              ],
+              "tip": "Метафора: Past Simple — фотография с датой. Present Perfect — мост между «тогда» и «сейчас». Если мост не нужен, не строй его.",
+              "content": "Present Perfect не любит закрытые двери. Если период закончился или вопрос начинается с when, используй Past Simple. Если период ещё открыт — today, this week, in my life — Present Perfect уместен. Отрицание и вопрос не меняют это правило."
+            },
+            {
+              "type": "reading_heavy",
+              "nav_label": "История",
+              "eyebrow": "03 · READING / 5 MIN",
+              "title": "The Message I Never Sent",
+              "intro": "Маленькая история о старом телефоне, одном неотправленном сообщении и двух временах, которые встретились в одном чате.",
+              "word_count_label": "≈ 390 слов · 5 минут",
+              "glossary_hint": "Подчёркнутые слова — интерактивный глоссарий. Коснись любого, чтобы увидеть перевод.",
+              "text": "<p>Last Tuesday I found an old phone in the bottom <span class=\"vocab\" data-translation=\"ящик\" data-pos=\"существительное\">drawer</span> of my desk. I had not used it since 2019, but the battery still had a little life in it. I charged it, turned it on, and waited. The screen lit up with dozens of <span class=\"vocab\" data-translation=\"уведомления\" data-pos=\"существительное\">notifications</span> from another life. For a moment I just <span class=\"vocab\" data-translation=\"уставился; пристально смотрел\" data-pos=\"глагол\">stared</span> at them. I have never been good at saying goodbye, so I did not open the messages right away. Then I saw a name I have not thought about in years: Daniel.</p><p>We met at university in 2016. He was the loud one in the group — always late, always laughing, always borrowing my <span class=\"vocab\" data-translation=\"зарядное устройство\" data-pos=\"существительное\">charger</span>. We spent three years making plans we never kept. After graduation, he moved to Berlin and I stayed in Manchester. At first we texted every day. Then every week. Then, <span class=\"vocab\" data-translation=\"каким-то образом\" data-pos=\"наречие\">somehow</span>, not at all.</p><p>On the phone there was one <span class=\"vocab\" data-translation=\"неотправленный\" data-pos=\"прилагательное\">unsent</span> message. I wrote it on a rainy night two years ago, when I heard that Daniel was back in town. It said: “I know we haven't talked in a while, but I've got two tickets for Saturday. Want to go?” I never pressed send. I was <span class=\"vocab\" data-translation=\"боялся; испуганный\" data-pos=\"прилагательное\">afraid</span> that he had moved on, and I didn't want to find out.</p><p>Have you ever done that? Have you ever written something <span class=\"vocab\" data-translation=\"честный\" data-pos=\"прилагательное\">honest</span> and then hidden it? I have. For a long time, I thought silence was safer than <span class=\"vocab\" data-translation=\"отказ\" data-pos=\"существительное\">rejection</span>. But that night, something changed. I opened our last conversation and typed: “Hey. I found our old tickets. I've been thinking about that summer a lot. Are you free this weekend?” Then I pressed send before my fear could stop me.</p><p>Daniel replied in four minutes. He had been back in Manchester for six months. He said he had thought about calling me many times, but he had <span class=\"vocab\" data-translation=\"предположил; допустил\" data-pos=\"глагол\">assumed</span> I was too busy. We met on Saturday. We talked for five hours, and we have seen each other every week since.</p><p>I still keep that old phone. Not because I need it, but because it <span class=\"vocab\" data-translation=\"напоминает\" data-pos=\"глагол\">reminds</span> me of an important lesson. The past is a place we can visit; it is not a place we can edit. The present perfect is the tense of <span class=\"vocab\" data-translation=\"незавершённый\" data-pos=\"прилагательное\">unfinished</span> business — a <span class=\"vocab\" data-translation=\"мост\" data-pos=\"существительное\">bridge</span> between then and now. Some bridges are built with a single message, and it only takes one <span class=\"vocab\" data-translation=\"смелый\" data-pos=\"прилагательное\">brave</span> click to start.</p>"
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 1",
+              "eyebrow": "04 · LISTEN IN",
+              "title": "Ten Years Later",
+              "intro": "Живой диалог в кофейне. Следи за тем, как Present Perfect говорит о незакрытом периоде, а Past Simple — о конкретном моменте.",
+              "setting": "Coffee house · Saturday, 18:01",
+              "date_label": "Today · 18:01",
+              "viewer": "maya",
+              "participants": [
+                {
+                  "id": "leo",
+                  "name": "Leo",
+                  "initials": "L",
+                  "status": "online",
+                  "tone": "cyan"
+                },
+                {
+                  "id": "maya",
+                  "name": "Maya",
+                  "initials": "M",
+                  "status": "online",
+                  "tone": "emerald"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "leo",
+                  "text": "Hey. Sorry I'm late — have you been waiting long?",
+                  "time": "18:02"
+                },
+                {
+                  "from": "maya",
+                  "text": "Ten minutes. I ordered you a flat white.",
+                  "time": "18:03",
+                  "reaction": "☕ 2"
+                },
+                {
+                  "from": "leo",
+                  "text": "You remembered. I haven't had one since Berlin.",
+                  "time": "18:03"
+                },
+                {
+                  "from": "maya",
+                  "text": "So, how long have you been back?",
+                  "time": "18:04"
+                },
+                {
+                  "from": "leo",
+                  "text": "Two weeks. I meant to text you, but I lost your number.",
+                  "time": "18:05"
+                },
+                {
+                  "from": "maya",
+                  "text": "You could have found me on Instagram.",
+                  "time": "18:05"
+                },
+                {
+                  "from": "leo",
+                  "text": "Fair. I saw your post about the studio. It looks incredible.",
+                  "time": "18:06"
+                },
+                {
+                  "from": "maya",
+                  "text": "Thanks. We opened in March. Have you seen the new photos?",
+                  "time": "18:07"
+                },
+                {
+                  "from": "leo",
+                  "text": "Only the ones you posted. I haven't visited yet.",
+                  "time": "18:07"
+                },
+                {
+                  "from": "maya",
+                  "text": "Did you ever finish the documentary?",
+                  "time": "18:09"
+                },
+                {
+                  "from": "leo",
+                  "text": "Actually, yes. I finished it last month. We screened it in Lisbon.",
+                  "time": "18:10"
+                },
+                {
+                  "from": "maya",
+                  "text": "Wait — you went to Lisbon? When?",
+                  "time": "18:10"
+                },
+                {
+                  "from": "leo",
+                  "text": "In June. It was the best week of the year.",
+                  "time": "18:11"
+                },
+                {
+                  "from": "maya",
+                  "text": "I can't believe you didn't tell me.",
+                  "time": "18:12"
+                },
+                {
+                  "from": "leo",
+                  "text": "I'm telling you now. And I've brought you something.",
+                  "time": "18:13"
+                },
+                {
+                  "from": "maya",
+                  "text": "Leo...",
+                  "time": "18:14"
+                },
+                {
+                  "from": "leo",
+                  "text": "It's just a notebook. I wrote your name on the first page in 2018, and I never gave it to you.",
+                  "time": "18:15"
+                },
+                {
+                  "from": "maya",
+                  "text": "You've kept it all this time?",
+                  "time": "18:16"
+                },
+                {
+                  "from": "leo",
+                  "text": "I have. Some things are worth waiting for.",
+                  "time": "18:17"
+                },
+                {
+                  "from": "maya",
+                  "text": "That's either the sweetest or the most dramatic thing I've heard this year.",
+                  "time": "18:18"
+                },
+                {
+                  "from": "leo",
+                  "text": "Both. Definitely both.",
+                  "time": "18:19",
+                  "reaction": "🤝 1"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "Have you been waiting long?",
+                  "explanation": "Действие началось раньше и продолжается сейчас — открытый период."
+                },
+                {
+                  "phrase": "I saw your post",
+                  "explanation": "Конкретное действие в прошлом. Нас не интересует его связь с настоящим."
+                },
+                {
+                  "phrase": "I haven't visited yet",
+                  "explanation": "yet указывает на незакрытый период: визита всё ещё не было."
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 2",
+              "eyebrow": "05 · NEXT MORNING",
+              "title": "The Morning After",
+              "intro": "Короткое продолжение истории. Второй диалог в уроке — движок строит навигацию по порядку блоков.",
+              "setting": "Messages · Sunday, 09:12",
+              "date_label": "Today · 09:12",
+              "viewer": "maya",
+              "participants": [
+                {
+                  "id": "leo",
+                  "name": "Leo",
+                  "initials": "L",
+                  "status": "online",
+                  "tone": "cyan"
+                },
+                {
+                  "id": "maya",
+                  "name": "Maya",
+                  "initials": "M",
+                  "status": "online",
+                  "tone": "emerald"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "leo",
+                  "text": "I still can't believe you kept that notebook.",
+                  "time": "09:13"
+                },
+                {
+                  "from": "maya",
+                  "text": "I can't believe you wrote my name in it.",
+                  "time": "09:13"
+                },
+                {
+                  "from": "leo",
+                  "text": "I was eighteen. I was dramatic.",
+                  "time": "09:14"
+                },
+                {
+                  "from": "maya",
+                  "text": "You're still dramatic.",
+                  "time": "09:14"
+                },
+                {
+                  "from": "leo",
+                  "text": "Fair. So... breakfast?",
+                  "time": "09:15"
+                },
+                {
+                  "from": "maya",
+                  "text": "Only if you're buying.",
+                  "time": "09:15"
+                },
+                {
+                  "from": "leo",
+                  "text": "I've already ordered. You're late, by the way.",
+                  "time": "09:16"
+                },
+                {
+                  "from": "maya",
+                  "text": "I'm never late. I'm fashionably delayed.",
+                  "time": "09:16",
+                  "reaction": "☕ 2"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "I still can't believe",
+                  "explanation": "Настоящее отношение к прошлому событию."
+                },
+                {
+                  "phrase": "I was eighteen",
+                  "explanation": "Past Simple: конкретный возраст в прошлом."
+                },
+                {
+                  "phrase": "I've already ordered",
+                  "explanation": "Present Perfect: результат к моменту разговора."
+                }
+              ]
+            },
+            {
+              "type": "practice_write",
+              "nav_label": "Письмо",
+              "eyebrow": "05 · WRITE LAB",
+              "title": "Write it into existence",
+              "prompt": "Напиши короткое письмо — себе из прошлого или другу, с которым давно не общался.",
+              "brief": "Начни с конкретного воспоминания в Past Simple. Затем покажи, что оно значит для тебя сейчас, через Present Perfect. Финал — одна вещь, которая осталась незавершённой.",
+              "min_words": 90,
+              "max_words": 140,
+              "constraints": [
+                "90+ слов",
+                "Past Simple × 2",
+                "Present Perfect × 2"
+              ],
+              "placeholder": "Dear past me,\n\nLast summer, I ...\n\nSince then, I have ...\n\nI still haven't ...",
+              "suggestions": [
+                "Last summer, I...",
+                "I have never...",
+                "Since then, I have...",
+                "I haven't ... yet.",
+                "It was the first time I..."
+              ],
+              "checklist": [
+                "Минимум 2 предложения в Past Simple с точным временем.",
+                "Минимум 2 предложения в Present Perfect без точной даты.",
+                "Одно слово или идея из истории про неотправленное сообщение.",
+                "Финал отвечает: что осталось незавершённым?"
+              ],
+              "save_label": "Сохранить работу",
+              "restore_hint": "Черновик хранится только в этом браузере и никуда не отправляется."
+            },
+            {
+              "type": "quiz",
+              "nav_label": "Тест",
+              "eyebrow": "06 · KNOWLEDGE CHECK",
+              "title": "Проверь своё время",
+              "intro": "Три вопроса без подсказок. Выбирай вариант — движок сразу покажет, где правило сработало, а где ещё есть баг.",
+              "questions": [
+                {
+                  "question": "Какое предложение построено правильно?",
+                  "options": [
+                    "I have seen him yesterday.",
+                    "I saw him yesterday.",
+                    "I have saw him yesterday."
+                  ],
+                  "correct": 1,
+                  "explanation": "yesterday — закрытая точка в прошлом. Present Perfect не может стоять рядом с точной датой, а после have нужен V3, а не V2."
+                },
+                {
+                  "question": "Выбери правильный вариант: When ___ you ___ the film?",
+                  "options": [
+                    "did / watch",
+                    "have / watched",
+                    "did / watched"
+                  ],
+                  "correct": 0,
+                  "explanation": "when спрашивает о конкретном времени, поэтому используем Past Simple: did + базовая форма глагола. После did смысловой глагол не ставим в прошедшее время."
+                },
+                {
+                  "question": "I ___ my keys. I can't open the door.",
+                  "options": [
+                    "lost",
+                    "have lost",
+                    "was losing"
+                  ],
+                  "correct": 1,
+                  "explanation": "Результат важен прямо сейчас: ключей нет, дверь закрыта. Present Perfect связывает прошлое действие с настоящим состоянием."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "slug": "articles-a-an-the-zero",
+          "module": "GRAMMAR // 02",
+          "level": "A2–B1",
+          "duration": "18–22 мин",
+          "title": "A / An / The / Zero Article",
+          "title_parts": [
+            "A / An / The",
+            "Zero Article"
+          ],
+          "subtitle": "Артикль — это не украшение, а указатель. Научись понимать, что уже известно слушателю.",
+          "description": "Разбираем самую частую причину мелких, но заметных ошибок: артикли. Поймём логику a / an / the / zero article, прочитаем историю о собеседовании и проверим себя в интерактивном тесте.",
+          "badge": "NEW",
+          "hero_check": {
+            "bad": "I need an useful tool.",
+            "error": "SOUND_MISMATCH",
+            "pointer": "useful → /ˈjuːsfəl/ → a",
+            "good": "I need a useful tool.",
+            "result": "1 rule applied · exit code 0"
+          },
+          "blocks": [
+            {
+              "type": "theory",
+              "nav_label": "Модель",
+              "eyebrow": "01 · ARTICLE MODEL",
+              "title": "A / An / The: три указателя",
+              "terminal_label": "articles.rule",
+              "rule_lines": [
+                {
+                  "tone": "cyan",
+                  "prompt": "A / AN",
+                  "text": "один из многих · слушатель ещё не знает, какой именно"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "THE",
+                  "text": "конкретный · слушатель понимает, какой именно"
+                },
+                {
+                  "tone": "muted",
+                  "prompt": "ZERO",
+                  "text": "обобщение · категория целиком"
+                }
+              ],
+              "formulas": [
+                {
+                  "label": "A / AN",
+                  "structure": "a + consonant sound / an + vowel sound",
+                  "example": "an hour · a university",
+                  "note": "Смотри на звук, а не на букву"
+                },
+                {
+                  "label": "THE",
+                  "structure": "the + known / unique noun",
+                  "example": "the moon · the woman I met",
+                  "note": "Слушатель знает, какой именно объект"
+                }
+              ],
+              "tip": "Проверка: если собеседник может спросить «какой именно?», скорее всего, нужен the. Если предмет просто один из многих — a / an. Если речь о категории целиком — zero article.",
+              "content": "Артикль — это маркер определённости. A / an ставим, когда предмет появляется в разговоре впервые и он один из многих. The — когда собеседник уже понимает, о каком именно предмете речь. Нулевой артикль — когда говорим о категории в целом."
+            },
+            {
+              "type": "theory",
+              "nav_label": "Zero article",
+              "eyebrow": "02 · ZERO ARTICLE",
+              "title": "Когда артикль молчит",
+              "terminal_label": "articles.zero",
+              "rule_lines": [
+                {
+                  "tone": "emerald",
+                  "prompt": "GENERAL",
+                  "text": "Cats are independent. · Life is short."
+                },
+                {
+                  "tone": "cyan",
+                  "prompt": "INSTITUTION",
+                  "text": "go to school · at work · in bed"
+                },
+                {
+                  "tone": "muted",
+                  "prompt": "NAMES",
+                  "text": "Paris · France · English · breakfast"
+                }
+              ],
+              "mistakes": [
+                {
+                  "bad": "I visited the France last year.",
+                  "good": "I visited France last year.",
+                  "why": "Названия большинства стран и городов идут без артикля. Исключения: the USA, the UK, the Netherlands."
+                },
+                {
+                  "bad": "The cats are independent animals.",
+                  "good": "Cats are independent animals.",
+                  "why": "Речь о кошках вообще — это обобщение, а не конкретные кошки."
+                },
+                {
+                  "bad": "He is at the work.",
+                  "good": "He is at work.",
+                  "why": "work как место или процесс — устойчивое выражение без артикля."
+                }
+              ],
+              "tip": "Не путай: go to school — «учиться», go to the school — «идти в конкретное здание». Контекст меняет указатель.",
+              "content": "Zero article — не «забыл поставить артикль», а осознанный выбор. Он появляется с множественным числом и неисчисляемыми существительными в обобщении, с названиями большинства стран и городов, языков и приёмов пищи, а также с институциями вроде school, work, home и bed."
+            },
+            {
+              "type": "reading_heavy",
+              "nav_label": "Текст",
+              "eyebrow": "03 · READING / 4 MIN",
+              "title": "The Interview",
+              "intro": "Практический текст о первом собеседовании. Замечай артикли — они здесь работают как указатели, а не как случайные слова.",
+              "word_count_label": "≈ 260 слов · 4 минуты",
+              "glossary_hint": "Подчёркнутые слова кликабельны. Читай историю и попутно собирай лексику.",
+              "text": "<p>On Monday morning, I had an <span class=\"vocab\" data-translation=\"собеседование\" data-pos=\"существительное\">interview</span> at a design studio in London. The interview was at nine, and I arrived forty minutes early. I bought a coffee from a small café across the street. The coffee was terrible, but I drank it anyway. At 8:55, I walked into the building and introduced myself to the <span class=\"vocab\" data-translation=\"администратор ресепшена\" data-pos=\"существительное\">receptionist</span>. She gave me a visitor badge and asked me to wait near the stairs.</p><p>I had prepared for weeks, but my hands were still <span class=\"vocab\" data-translation=\"дрожащие; трясущиеся\" data-pos=\"причастие\">shaking</span>. The <span class=\"vocab\" data-translation=\"портфолио\" data-pos=\"существительное\">portfolio</span> on my lap felt heavier than it had the night before. A woman in a grey suit opened the door and smiled. “You must be Maya,” she said. “I'm Anna, the creative director.” The office was open and bright, with plants on every desk.</p><p>Anna asked me about a campaign I had made for a small <span class=\"vocab\" data-translation=\"благотворительная организация\" data-pos=\"существительное\">charity</span>. I explained the idea, and she listened without <span class=\"vocab\" data-translation=\"перебивая\" data-pos=\"герундий\">interrupting</span>. Then she asked, “Why do you want to work in design?” I said, “Because a good idea can make a difficult subject feel simple.” She nodded, wrote something in her notebook, and closed it.</p><p>“We have one more question,” she said. “How do you handle a <span class=\"vocab\" data-translation=\"срок сдачи; дедлайн\" data-pos=\"существительное\">deadline</span>?” I told her about a project that had gone wrong and what I had learned. She smiled again. “The <span class=\"vocab\" data-translation=\"честность\" data-pos=\"существительное\">honesty</span> is refreshing.”</p><p>On Friday, I got an email with an offer. I still keep the visitor badge in a drawer — a reminder that an interview is just a conversation with a purpose. The best <span class=\"vocab\" data-translation=\"возможности\" data-pos=\"существительное\">opportunities</span> often begin with a small, <span class=\"vocab\" data-translation=\"пугающий\" data-pos=\"прилагательное\">terrifying</span> step.</p>"
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 1",
+              "eyebrow": "04 · STUDIO CHAT",
+              "title": "The Portfolio Review",
+              "intro": "Короткий разговор в дизайн-студии. Замечай, как артикли помогают понять, о каком именно предмете идёт речь.",
+              "setting": "Design studio · Wednesday, 11:20",
+              "date_label": "Today · 11:20",
+              "viewer": "priya",
+              "participants": [
+                {
+                  "id": "noah",
+                  "name": "Noah",
+                  "initials": "N",
+                  "status": "online",
+                  "tone": "cyan"
+                },
+                {
+                  "id": "priya",
+                  "name": "Priya",
+                  "initials": "P",
+                  "status": "online",
+                  "tone": "emerald"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "priya",
+                  "text": "I saw the draft of your poster. The colours are strong.",
+                  "time": "11:21"
+                },
+                {
+                  "from": "noah",
+                  "text": "Thanks. I'm still deciding about the title. It needs to feel like a magazine cover.",
+                  "time": "11:22"
+                },
+                {
+                  "from": "priya",
+                  "text": "Maybe use a photo instead of an illustration? The one from the park is beautiful.",
+                  "time": "11:22"
+                },
+                {
+                  "from": "noah",
+                  "text": "I tried that. The photo is too dark for print.",
+                  "time": "11:23"
+                },
+                {
+                  "from": "priya",
+                  "text": "What about the orange version? An orange headline could work.",
+                  "time": "11:24"
+                },
+                {
+                  "from": "noah",
+                  "text": "Hmm. The client wants something minimal.",
+                  "time": "11:24"
+                },
+                {
+                  "from": "priya",
+                  "text": "Then remove the extra text. An idea needs space.",
+                  "time": "11:25"
+                },
+                {
+                  "from": "noah",
+                  "text": "You're right. I'll test a cleaner layout after lunch.",
+                  "time": "11:26"
+                },
+                {
+                  "from": "priya",
+                  "text": "Send me the next version. The deadline is Friday, isn't it?",
+                  "time": "11:27"
+                },
+                {
+                  "from": "noah",
+                  "text": "Yes. And after that, I'm taking a week off.",
+                  "time": "11:28"
+                },
+                {
+                  "from": "priya",
+                  "text": "Good. You need a break.",
+                  "time": "11:28"
+                },
+                {
+                  "from": "noah",
+                  "text": "I know. The last month has been intense.",
+                  "time": "11:29",
+                  "reaction": "☕ 1"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "the draft of your poster",
+                  "explanation": "the — слушатель уже знает, о каком черновике речь: это проект Ноа."
+                },
+                {
+                  "phrase": "a photo / an illustration",
+                  "explanation": "a/an — один из возможных вариантов, ещё не конкретный предмет."
+                },
+                {
+                  "phrase": "the deadline",
+                  "explanation": "Конкретный дедлайн известен обоим участникам разговора."
+                }
+              ]
+            },
+            {
+              "type": "quiz",
+              "nav_label": "Тест",
+              "eyebrow": "04 · KNOWLEDGE CHECK",
+              "title": "Article check",
+              "intro": "Три ситуации, три решения. Выбирай артикль и смотри объяснение — без угадывания.",
+              "questions": [
+                {
+                  "question": "I need ___ umbrella. It's raining.",
+                  "options": [
+                    "a",
+                    "an",
+                    "the",
+                    "—"
+                  ],
+                  "correct": 1,
+                  "explanation": "umbrella начинается с гласного звука /ʌ/, поэтому используем an. Слово ещё не конкретное — это просто один зонт из многих."
+                },
+                {
+                  "question": "___ moon looks beautiful tonight.",
+                  "options": [
+                    "A",
+                    "An",
+                    "The",
+                    "—"
+                  ],
+                  "correct": 2,
+                  "explanation": "Луна единственная в этом контексте, слушатель понимает, о каком объекте речь. Нужен определённый артикль the."
+                },
+                {
+                  "question": "She goes to ___ school every day.",
+                  "options": [
+                    "a",
+                    "an",
+                    "the",
+                    "—"
+                  ],
+                  "correct": 3,
+                  "explanation": "school здесь означает учёбу как институцию, а не конкретное здание. Поэтому zero article. Если речь о конкретном здании, возможен the."
+                }
+              ]
+            },
+            {
+              "type": "practice_write",
+              "nav_label": "Письмо",
+              "eyebrow": "05 · WRITE LAB",
+              "title": "A day, with articles",
+              "prompt": "Опиши свой обычный день так, чтобы артикли работали на смысл.",
+              "brief": "Используй минимум 3 a/an, 3 the и 2 zero article. Сделай так, чтобы читатель понимал, когда предмет появляется впервые и когда речь идёт о конкретном объекте.",
+              "min_words": 80,
+              "max_words": 130,
+              "constraints": [
+                "80+ слов",
+                "a / an × 3",
+                "the × 3",
+                "zero × 2"
+              ],
+              "placeholder": "My day starts with...\n\nI usually have a ...\n\nThe first thing I do is ...\n\nAfter work, I ...",
+              "suggestions": [
+                "My day starts with a...",
+                "The first thing I do is...",
+                "After work, I...",
+                "On weekends, I..."
+              ],
+              "checklist": [
+                "Минимум 3 существительных с a или an.",
+                "Минимум 3 конкретных существительных с the.",
+                "Минимум 2 случая zero article — обобщение или институция.",
+                "Проверь звук перед a/an: an hour, a university."
+              ],
+              "save_label": "Сохранить работу",
+              "restore_hint": "Черновик хранится только в этом браузере и никуда не отправляется."
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "slug": "present-simple-vs-present-continuous",
+          "module": "GRAMMAR // 03",
+          "level": "A2–B1",
+          "duration": "18–22 мин",
+          "title": "Present Simple vs Present Continuous",
+          "title_parts": [
+            "Present Simple",
+            "vs Present Continuous"
+          ],
+          "subtitle": "Привычка или момент? Выбери настоящее, которое действительно имеешь в виду.",
+          "description": "Разбираем два настоящих времени: рутину, факты и расписания против действий прямо сейчас, временных ситуаций и изменений. Теория, история, диалог, тест и письмо.",
+          "badge": "NEW",
+          "hero_check": {
+            "bad": "I am knowing the answer.",
+            "error": "STATE_VERB_IN_CONTINUOUS",
+            "pointer": "know → state verb → Present Simple",
+            "good": "I know the answer.",
+            "result": "1 rule applied · exit code 0"
+          },
+          "blocks": [
+            {
+              "type": "theory",
+              "nav_label": "Модель",
+              "eyebrow": "01 · PRESENT LENSES",
+              "title": "Привычка против момента",
+              "terminal_label": "present.compare",
+              "rule_lines": [
+                {
+                  "tone": "cyan",
+                  "prompt": "PRESENT SIMPLE",
+                  "text": "повторяется · всегда / обычно / каждый день"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "PRESENT CONTINUOUS",
+                  "text": "происходит сейчас · временно · меняется"
+                },
+                {
+                  "tone": "muted",
+                  "prompt": "STATE VERBS",
+                  "text": "know · like · need · believe → обычно не в -ing"
+                }
+              ],
+              "formulas": [
+                {
+                  "label": "Present Simple",
+                  "structure": "S + V1 / S + V-s",
+                  "example": "She works from home every Friday.",
+                  "note": "Регулярность, факт, расписание"
+                },
+                {
+                  "label": "Present Continuous",
+                  "structure": "S + am / is / are + V-ing",
+                  "example": "She is working from home this week.",
+                  "note": "Момент речи или временная ситуация"
+                }
+              ],
+              "mistakes": [
+                {
+                  "bad": "I am knowing the answer.",
+                  "good": "I know the answer.",
+                  "why": "know — state verb. Состояния обычно не ставят в Continuous."
+                },
+                {
+                  "bad": "She work every day.",
+                  "good": "She works every day.",
+                  "why": "В Present Simple с he / she / it к глаголу добавляется -s."
+                },
+                {
+                  "bad": "I am work now.",
+                  "good": "I am working now.",
+                  "why": "После am / is / are нужна форма -ing, а не базовая форма."
+                }
+              ],
+              "tip": "Маркеры — подсказка, а не приказ: usually тянет к Simple, right now — к Continuous. Но окончательное решение всегда за смыслом.",
+              "content": "Present Simple описывает привычки, факты и расписания: I work from home every Friday. Present Continuous — действие в момент речи или временную ситуацию: I am working from home this week. Вопрос не в том, «какое время сейчас», а в том, что ты хочешь сказать: повторяется или происходит именно сейчас."
+            },
+            {
+              "type": "reading_heavy",
+              "nav_label": "История",
+              "eyebrow": "02 · READING / 4 MIN",
+              "title": "The Tuesday Shift",
+              "intro": "Одно утро в кофейне, где привычный порядок временно изменился. Следи за тем, какие действия повторяются, а какие происходят прямо сейчас.",
+              "word_count_label": "≈ 280 слов · 4 минуты",
+              "glossary_hint": "Подчёркнутые слова кликабельны. Читай историю и попутно собирай лексику.",
+              "text": "<p>Every Tuesday, Mia opens the café at seven. She unlocks the door, turns on the lights, and checks the <span class=\"vocab\" data-translation=\"смена\" data-pos=\"существительное\">shift</span> schedule. Usually, she works alone until nine, but this week is different. Her manager is visiting another city, so Mia is training a new <span class=\"vocab\" data-translation=\"коллега\" data-pos=\"существительное\">colleague</span> named Ollie.</p><p>Ollie is learning fast. He usually works in an office, but he wants a change. “I'm not used to standing all day,” he says. Mia smiles. “You'll get used to it. The first week is always the hardest.”</p><p>The café is busier than usual this morning. A <span class=\"vocab\" data-translation=\"очередь\" data-pos=\"существительное\">queue</span> is forming near the counter, and the coffee machine is making a strange noise. Mia is making drinks while Ollie takes orders. He is <span class=\"vocab\" data-translation=\"уверенный\" data-pos=\"прилагательное\">confident</span> with customers already, even when the <span class=\"vocab\" data-translation=\"рецепт\" data-pos=\"существительное\">recipe</span> for a new drink is <span class=\"vocab\" data-translation=\"сложный\" data-pos=\"прилагательное\">complicated</span>.</p><p>“What's the hardest part of the job?” Ollie asks during a quiet moment. “The <span class=\"vocab\" data-translation=\"рутина; режим\" data-pos=\"существительное\">routine</span>,” Mia says. “You do the same things every day, but every customer is different. You have to <span class=\"vocab\" data-translation=\"замечать\" data-pos=\"глагол\">notice</span> the small things.”</p><p>At noon, they take a break. Mia usually eats outside, but today she is sitting in the back room. She is writing a <span class=\"vocab\" data-translation=\"временный\" data-pos=\"прилагательное\">temporary</span> schedule for next week. Ollie is <span class=\"vocab\" data-translation=\"измотанный\" data-pos=\"прилагательное\">exhausted</span>, but he is still smiling. “I'm <span class=\"vocab\" data-translation=\"гибкий\" data-pos=\"прилагательное\">flexible</span> tomorrow,” he says. “I can start early.”</p><p>Mia looks at the busy room, the clean counter, and her new colleague. The café is changing, just a little. For now, that feels like a good thing.</p>"
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 1",
+              "eyebrow": "03 · SIDE PROJECT",
+              "title": "The Side Project",
+              "intro": "Переписка после работы. Одно действие повторяется, другое происходит прямо сейчас — попробуй заметить разницу.",
+              "setting": "Messages · Tuesday, 21:40",
+              "date_label": "Today · 21:40",
+              "viewer": "nina",
+              "participants": [
+                {
+                  "id": "ava",
+                  "name": "Ava",
+                  "initials": "A",
+                  "status": "online",
+                  "tone": "cyan"
+                },
+                {
+                  "id": "nina",
+                  "name": "Nina",
+                  "initials": "N",
+                  "status": "online",
+                  "tone": "emerald"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "nina",
+                  "text": "Are you still working on the website?",
+                  "time": "21:41"
+                },
+                {
+                  "from": "ava",
+                  "text": "Yes, I'm rewriting the homepage right now. It's taking forever.",
+                  "time": "21:41"
+                },
+                {
+                  "from": "nina",
+                  "text": "You usually finish these things by dinner.",
+                  "time": "21:42"
+                },
+                {
+                  "from": "ava",
+                  "text": "I know, but this client keeps changing the brief.",
+                  "time": "21:42"
+                },
+                {
+                  "from": "nina",
+                  "text": "Do they know you have another job?",
+                  "time": "21:43"
+                },
+                {
+                  "from": "ava",
+                  "text": "They do. I'm only doing this project until the end of May.",
+                  "time": "21:44"
+                },
+                {
+                  "from": "nina",
+                  "text": "And after May?",
+                  "time": "21:44"
+                },
+                {
+                  "from": "ava",
+                  "text": "I'm not sure. I'm thinking about going freelance.",
+                  "time": "21:45"
+                },
+                {
+                  "from": "nina",
+                  "text": "You always say that when you're tired.",
+                  "time": "21:46"
+                },
+                {
+                  "from": "ava",
+                  "text": "Maybe. But this time I'm actually saving money for it.",
+                  "time": "21:47"
+                },
+                {
+                  "from": "nina",
+                  "text": "Good. You work too much, though.",
+                  "time": "21:48"
+                },
+                {
+                  "from": "ava",
+                  "text": "I know. I'm trying to change that too.",
+                  "time": "21:49",
+                  "reaction": "💬 1"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "I usually finish",
+                  "explanation": "usually + Present Simple: привычное действие."
+                },
+                {
+                  "phrase": "I'm rewriting right now",
+                  "explanation": "Present Continuous: действие происходит в момент разговора."
+                },
+                {
+                  "phrase": "I'm only doing this until May",
+                  "explanation": "Временная ситуация с границей во времени — Continuous."
+                }
+              ]
+            },
+            {
+              "type": "quiz",
+              "nav_label": "Тест",
+              "eyebrow": "04 · KNOWLEDGE CHECK",
+              "title": "Simple or Continuous?",
+              "intro": "Четыре коротких вопроса. Выбирай форму и сразу смотри, какая логика сработала.",
+              "questions": [
+                {
+                  "question": "She ___ to work by train every day.",
+                  "options": [
+                    "go",
+                    "goes",
+                    "is going"
+                  ],
+                  "correct": 1,
+                  "explanation": "every day — регулярная привычка. В Present Simple с she добавляем -s: goes."
+                },
+                {
+                  "question": "Please be quiet. The baby ___.",
+                  "options": [
+                    "sleeps",
+                    "is sleeping",
+                    "sleep"
+                  ],
+                  "correct": 1,
+                  "explanation": "Действие происходит прямо сейчас, поэтому Present Continuous: is sleeping."
+                },
+                {
+                  "question": "I ___ what you mean.",
+                  "options": [
+                    "am understanding",
+                    "understand",
+                    "am understand"
+                  ],
+                  "correct": 1,
+                  "explanation": "understand — state verb. Состояния обычно не используются в Continuous."
+                },
+                {
+                  "question": "We usually ___ at home, but this week we ___ in a hotel.",
+                  "options": [
+                    "stay / are staying",
+                    "are staying / stay",
+                    "stays / staying"
+                  ],
+                  "correct": 0,
+                  "explanation": "usually → Present Simple; this week, временно → Present Continuous."
+                }
+              ]
+            },
+            {
+              "type": "practice_write",
+              "nav_label": "Письмо",
+              "eyebrow": "05 · WRITE LAB",
+              "title": "A day, in two lenses",
+              "prompt": "Опиши свой обычный день и одну временную ситуацию, которая происходит на этой неделе.",
+              "brief": "Используй минимум 3 предложения в Present Simple для привычек и 3 предложения в Present Continuous для временных действий. Проверь state verbs: know, like, need, want.",
+              "min_words": 80,
+              "max_words": 120,
+              "constraints": [
+                "80+ слов",
+                "Present Simple × 3",
+                "Continuous × 3"
+              ],
+              "placeholder": "I usually wake up at...\n\nThis week, I am...\n\nI always...",
+              "suggestions": [
+                "I usually...",
+                "This week, I am...",
+                "Right now, I...",
+                "I always..."
+              ],
+              "checklist": [
+                "Есть 3 привычки или факта в Present Simple.",
+                "Есть 3 временных действия в Present Continuous.",
+                "Правильно добавлен -s для he / she / it.",
+                "Нет -ing у state verbs."
+              ],
+              "save_label": "Сохранить работу",
+              "restore_hint": "Черновик хранится только в этом браузере и никуда не отправляется."
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "slug": "modal-verbs-must-have-to-should",
+          "module": "GRAMMAR // 04",
+          "level": "B1",
+          "duration": "20–24 мин",
+          "title": "Modal Verbs: Must, Have To, Should",
+          "title_parts": [
+            "Modal Verbs",
+            "Must / Have to / Should"
+          ],
+          "subtitle": "Правила, обязанности и советы — без путаницы между must, have to и should.",
+          "description": "Учимся различать личную обязанность, внешнее правило, совет и отсутствие необходимости. С историями из работы, диалогом, тестом и письменной практикой.",
+          "badge": "NEW",
+          "hero_check": {
+            "bad": "You must to wear a seatbelt.",
+            "error": "MODAL_PLUS_TO",
+            "pointer": "must + bare infinitive",
+            "good": "You must wear a seatbelt.",
+            "result": "1 rule applied · exit code 0"
+          },
+          "blocks": [
+            {
+              "type": "theory",
+              "nav_label": "Модель",
+              "eyebrow": "01 · MODAL LOGIC",
+              "title": "Кто устанавливает правило?",
+              "terminal_label": "modals.rule",
+              "rule_lines": [
+                {
+                  "tone": "cyan",
+                  "prompt": "MUST",
+                  "text": "сильная личная обязанность или правило от говорящего"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "HAVE TO",
+                  "text": "внешняя обязанность · правило извне"
+                },
+                {
+                  "tone": "muted",
+                  "prompt": "SHOULD",
+                  "text": "совет · рекомендация, а не обязанность"
+                },
+                {
+                  "tone": "red",
+                  "prompt": "MUSTN'T",
+                  "text": "запрещено — не то же самое, что don't have to"
+                }
+              ],
+              "formulas": [
+                {
+                  "label": "Must / mustn't",
+                  "structure": "S + must + V1 / S + mustn't + V1",
+                  "example": "You must wear a helmet.",
+                  "note": "Сильное правило или личная обязанность"
+                },
+                {
+                  "label": "Have to / don't have to",
+                  "structure": "S + have / has to + V1",
+                  "example": "I have to wear a uniform.",
+                  "note": "Внешнее правило; no obligation = don't have to"
+                }
+              ],
+              "mistakes": [
+                {
+                  "bad": "You must to wear a seatbelt.",
+                  "good": "You must wear a seatbelt.",
+                  "why": "После модального глагола не нужен to: must + bare infinitive."
+                },
+                {
+                  "bad": "I don't must work on Sunday.",
+                  "good": "I don't have to work on Sunday.",
+                  "why": "Must не использует do-support для отрицания. Для отсутствия обязанности — don't have to."
+                },
+                {
+                  "bad": "You mustn't to smoke here.",
+                  "good": "You mustn't smoke here.",
+                  "why": "Mustn't тоже требует базовую форму без to."
+                }
+              ],
+              "tip": "Проверка: mustn't = «нельзя, запрещено», don't have to = «можно не делать». Это разные вещи, и в тестах их часто меняют местами.",
+              "content": "Must, have to и should — три разных отношения к действию. Must звучит как сильное правило или личное решение. Have to описывает внешнюю обязанность: работу, закон, договорённость. Should даёт совет и оставляет выбор. После модальных глаголов идёт базовая форма без to."
+            },
+            {
+              "type": "reading_heavy",
+              "nav_label": "История",
+              "eyebrow": "02 · READING / 4 MIN",
+              "title": "The Uniform",
+              "intro": "Первый день в новой компании. Здесь много правил, но не все из них — запреты. Читай и замечай, кто устанавливает обязанности.",
+              "word_count_label": "≈ 290 слов · 4 минуты",
+              "glossary_hint": "Подчёркнутые слова кликабельны — открывай перевод и собирай лексику.",
+              "text": "<p>On her first day at the hotel, Lena receives a <span class=\"vocab\" data-translation=\"униформа; форма\" data-pos=\"существительное\">uniform</span> and a small card with the rules. The card says that staff must wear the uniform at all times. They mustn't eat in the guest areas, and they have to keep their phones in their lockers during shifts.</p><p>“Do we have to work every weekend?” Lena asks her <span class=\"vocab\" data-translation=\"руководитель\" data-pos=\"существительное\">supervisor</span>. “Not every weekend,” he says. “But you have to work two weekends a month. That's the <span class=\"vocab\" data-translation=\"обязательное требование\" data-pos=\"прилагательное\">mandatory</span> minimum.”</p><p>Lena nods. She understands the <span class=\"vocab\" data-translation=\"обязанность\" data-pos=\"существительное\">responsibility</span>, but she also has questions. “What about <span class=\"vocab\" data-translation=\"разрешение\" data-pos=\"существительное\">permission</span> to leave early?” she asks <span class=\"vocab\" data-translation=\"вежливо\" data-pos=\"наречие\">politely</span>. “You have to ask me first,” the supervisor says. “And you shouldn't promise guests anything you can't deliver.”</p><p>During the first busy hour, Lena forgets one of the rules. She checks her phone at the reception desk. A colleague gently reminds her: “You mustn't use your phone here. You can keep it in your locker. It's not personal — it's for the guests.”</p><p>Lena puts the phone away. She feels a little embarrassed, but she is also <span class=\"vocab\" data-translation=\"спокойный; уверенный\" data-pos=\"прилагательное\">confident</span> enough to ask questions. Later, the supervisor tells her, “You should take a proper break. You don't have to skip lunch to prove anything.”</p><p>By the end of the day, Lena knows the difference. Some rules are external and fixed. Some are advice. And some things she simply mustn't do. The <span class=\"vocab\" data-translation=\"исключение\" data-pos=\"существительное\">exception</span> is never worth breaking a clear safety rule for. She is tired, but she is also <span class=\"vocab\" data-translation=\"гибкий\" data-pos=\"прилагательное\">flexible</span>, curious, and ready to learn.</p>"
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 1",
+              "eyebrow": "03 · DEADLINE TALK",
+              "title": "The Deadline",
+              "intro": "Менеджер и дизайнер обсуждают сроки. Смотри, где звучит внешняя обязанность, где запрет, а где просто совет.",
+              "setting": "Studio · Thursday, 16:10",
+              "date_label": "Today · 16:10",
+              "viewer": "alex",
+              "participants": [
+                {
+                  "id": "mara",
+                  "name": "Mara",
+                  "initials": "M",
+                  "status": "online",
+                  "tone": "emerald"
+                },
+                {
+                  "id": "alex",
+                  "name": "Alex",
+                  "initials": "A",
+                  "status": "online",
+                  "tone": "cyan"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "mara",
+                  "text": "Do we have to send the final files today?",
+                  "time": "16:11"
+                },
+                {
+                  "from": "alex",
+                  "text": "The client has to receive them by five tomorrow. The contract says so.",
+                  "time": "16:12"
+                },
+                {
+                  "from": "mara",
+                  "text": "Then I have to finish the last three screens tonight.",
+                  "time": "16:13"
+                },
+                {
+                  "from": "alex",
+                  "text": "You don't have to do all of them alone. I can help.",
+                  "time": "16:13"
+                },
+                {
+                  "from": "mara",
+                  "text": "Thanks. But you mustn't export the files before the final check.",
+                  "time": "16:14"
+                },
+                {
+                  "from": "alex",
+                  "text": "Understood. Should I ask the client about the logo size?",
+                  "time": "16:15"
+                },
+                {
+                  "from": "mara",
+                  "text": "Yes, you should. They've changed it twice already.",
+                  "time": "16:15"
+                },
+                {
+                  "from": "alex",
+                  "text": "Do we have to wait for their answer before we finish?",
+                  "time": "16:16"
+                },
+                {
+                  "from": "mara",
+                  "text": "Not necessarily. We have to send the files, but we don't have to wait for feedback.",
+                  "time": "16:17"
+                },
+                {
+                  "from": "alex",
+                  "text": "Good. I must go to a meeting now, but I'll be back at six.",
+                  "time": "16:18"
+                },
+                {
+                  "from": "mara",
+                  "text": "You should eat something first. It's going to be a long evening.",
+                  "time": "16:18"
+                },
+                {
+                  "from": "alex",
+                  "text": "Fair advice. I'll bring coffee for both of us.",
+                  "time": "16:19",
+                  "reaction": "☕ 2"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "The client has to receive them",
+                  "explanation": "Внешняя обязанность из контракта — have to / has to."
+                },
+                {
+                  "phrase": "You don't have to do all of them",
+                  "explanation": "Нет обязанности, но можно. Это не запрет."
+                },
+                {
+                  "phrase": "You mustn't export the files",
+                  "explanation": "Запрет. Сильнее, чем should."
+                }
+              ]
+            },
+            {
+              "type": "quiz",
+              "nav_label": "Тест",
+              "eyebrow": "04 · KNOWLEDGE CHECK",
+              "title": "Obligation check",
+              "intro": "Проверь, различаешь ли ты запрет, отсутствие обязанности и совет.",
+              "questions": [
+                {
+                  "question": "It's a strict rule: you ___ wear a helmet on the site.",
+                  "options": [
+                    "must",
+                    "should",
+                    "don't have to"
+                  ],
+                  "correct": 0,
+                  "explanation": "Строгое правило и сильная обязанность — must. Should здесь звучал бы как совет."
+                },
+                {
+                  "question": "I ___ work this weekend — it's optional.",
+                  "options": [
+                    "mustn't",
+                    "don't have to",
+                    "shouldn't"
+                  ],
+                  "correct": 1,
+                  "explanation": "Работа необязательна, но разрешена: don't have to. Mustn't означало бы запрет."
+                },
+                {
+                  "question": "You ___ smoke in the hospital. It's forbidden.",
+                  "options": [
+                    "don't have to",
+                    "mustn't",
+                    "shouldn't"
+                  ],
+                  "correct": 1,
+                  "explanation": "Forbidden — запрет, поэтому mustn't. Shouldn't — совет, слишком мягко."
+                },
+                {
+                  "question": "You look exhausted. You ___ get some sleep.",
+                  "options": [
+                    "must",
+                    "have to",
+                    "should"
+                  ],
+                  "correct": 2,
+                  "explanation": "Это дружеский совет, а не обязанность — should."
+                }
+              ]
+            },
+            {
+              "type": "practice_write",
+              "nav_label": "Письмо",
+              "eyebrow": "05 · WRITE LAB",
+              "title": "The rulebook",
+              "prompt": "Напиши короткие правила и советы для человека, который начинает работу в твоей компании или учёбу в твоём университете.",
+              "brief": "Используй минимум 2 предложения с must / have to, 1 запрет с mustn't и 2 совета с should. Не перепутай mustn't и don't have to.",
+              "min_words": 80,
+              "max_words": 120,
+              "constraints": [
+                "80+ слов",
+                "must / have to × 2",
+                "mustn't × 1",
+                "should × 2"
+              ],
+              "placeholder": "On your first day, you must...\n\nYou don't have to...\n\nYou should...",
+              "suggestions": [
+                "On your first day, you must...",
+                "You don't have to...",
+                "You should...",
+                "You mustn't..."
+              ],
+              "checklist": [
+                "Есть 2 обязанности с must или have to.",
+                "Есть 1 запрет с mustn't.",
+                "Есть 2 совета с should.",
+                "Нет ошибки must to / should to."
+              ],
+              "save_label": "Сохранить работу",
+              "restore_hint": "Черновик хранится только в этом браузере и никуда не отправляется."
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "slug": "conditionals-first-second",
+          "module": "GRAMMAR // 05",
+          "level": "B1",
+          "duration": "22–26 мин",
+          "title": "Conditionals: First & Second",
+          "title_parts": [
+            "First & Second",
+            "Conditionals"
+          ],
+          "subtitle": "Реальные планы и нереальные мечты: как if меняет форму и смысл.",
+          "description": "Сравниваем First Conditional для реального будущего и Second Conditional для воображаемого настоящего. Теория, история, диалог, тест и письмо.",
+          "badge": "NEW",
+          "hero_check": {
+            "bad": "If I will see him, I will tell him.",
+            "error": "WILL_IN_IF_CLAUSE",
+            "pointer": "if + present simple, not will",
+            "good": "If I see him, I will tell him.",
+            "result": "1 rule applied · exit code 0"
+          },
+          "blocks": [
+            {
+              "type": "theory",
+              "nav_label": "Модель",
+              "eyebrow": "01 · IF ENGINE",
+              "title": "Реально или воображаемо?",
+              "terminal_label": "conditionals.rule",
+              "rule_lines": [
+                {
+                  "tone": "cyan",
+                  "prompt": "FIRST",
+                  "text": "if + present simple → will + V1 · реальное будущее"
+                },
+                {
+                  "tone": "emerald",
+                  "prompt": "SECOND",
+                  "text": "if + past simple → would + V1 · воображаемое настоящее"
+                },
+                {
+                  "tone": "muted",
+                  "prompt": "UNLESS",
+                  "text": "unless = if not · если не"
+                },
+                {
+                  "tone": "red",
+                  "prompt": "WARNING",
+                  "text": "после if не ставим will в обеих конструкциях"
+                }
+              ],
+              "formulas": [
+                {
+                  "label": "First Conditional",
+                  "structure": "If + present simple, will + V1",
+                  "example": "If it rains, we will stay home.",
+                  "note": "Реальный шанс в будущем"
+                },
+                {
+                  "label": "Second Conditional",
+                  "structure": "If + past simple, would + V1",
+                  "example": "If I had more time, I would travel.",
+                  "note": "Нереальная или воображаемая ситуация"
+                }
+              ],
+              "mistakes": [
+                {
+                  "bad": "If I will see him, I will tell him.",
+                  "good": "If I see him, I will tell him.",
+                  "why": "В if-части не нужен will. После if — Present Simple."
+                },
+                {
+                  "bad": "If I would have more money, I would travel.",
+                  "good": "If I had more money, I would travel.",
+                  "why": "В Second Conditional используем Past Simple, а не would have."
+                },
+                {
+                  "bad": "If I was you, I would apologize.",
+                  "good": "If I were you, I would apologize.",
+                  "why": "Для совета устойчивая форма — If I were you."
+                }
+              ],
+              "tip": "Быстрый тест: реально ли это может случиться? Если да — First (present → will). Если это мечта или гипотеза — Second (past → would).",
+              "content": "First Conditional говорит о реальном будущем: If it rains, we will stay home. Second Conditional описывает воображаемую или маловероятную ситуацию: If I had more time, I would travel. В if-части не используется will: после if идёт Present Simple, а would появляется во второй части."
+            },
+            {
+              "type": "reading_heavy",
+              "nav_label": "История",
+              "eyebrow": "02 · READING / 5 MIN",
+              "title": "The Other Offer",
+              "intro": "Два предложения о работе и один вечер, чтобы выбрать будущее. В истории много условий — одни реальные, другие только воображаемые.",
+              "word_count_label": "≈ 320 слов · 5 минут",
+              "glossary_hint": "Подчёркнутые слова кликабельны. Собирай лексику и замечай конструкции с if.",
+              "text": "<p>Nora has two job <span class=\"vocab\" data-translation=\"предложения (о работе)\" data-pos=\"существительное\">offers</span> on her kitchen table. The first one is from a large company in the city. It has a higher <span class=\"vocab\" data-translation=\"зарплата\" data-pos=\"существительное\">salary</span>, a longer <span class=\"vocab\" data-translation=\"дорога на работу\" data-pos=\"существительное\">commute</span>, and a very <span class=\"vocab\" data-translation=\"надёжный\" data-pos=\"прилагательное\">secure</span> future. The second one is from a small studio. It pays less, but the work sounds exciting.</p><p>“If you take the studio job, you will have less money,” her friend Ben says. “But if you stay at your current company, you will keep the security. What do you actually want?”</p><p>Nora <span class=\"vocab\" data-translation=\"колеблется\" data-pos=\"глагол\">hesitates</span>. If she had more <span class=\"vocab\" data-translation=\"смелость\" data-pos=\"существительное\">courage</span>, she would choose the studio immediately. If she were <span class=\"vocab\" data-translation=\"свободный; независимый\" data-pos=\"прилагательное\">independent</span> of her student loans, she wouldn't think about the salary so much. But she is not.</p><p>“If I take the safe job, I will <span class=\"vocab\" data-translation=\"сожалеть\" data-pos=\"глагол\">regret</span> it,” she says. “I know I will. But if I take the studio job and it fails, I will lose everything.”</p><p>Ben <span class=\"vocab\" data-translation=\"воображает\" data-pos=\"глагол\">imagines</span> the choice differently. “If I were you, I would ask the studio for one month to decide. If they really want you, they will wait. If they don't, you will have your answer.”</p><p>Nora sends the email that night. The studio replies in the morning: they can wait until Friday. She has one week to <span class=\"vocab\" data-translation=\"в итоге; в конце концов\" data-pos=\"наречие\">eventually</span> choose. On Friday, she walks into the small office with a decision. She doesn't know if it is the right one, but she knows it is hers. If she is lucky, it will become an <span class=\"vocab\" data-translation=\"возможность\" data-pos=\"существительное\">opportunity</span>. If not, it will become a lesson. Either way, she will learn something.</p>"
+            },
+            {
+              "type": "dialogue",
+              "nav_label": "Диалог 1",
+              "eyebrow": "03 · WHAT IF",
+              "title": "If We Moved",
+              "intro": "Разговор о переезде. Один собеседник строит реальный план, другой — воображаемый. Следи за формами после if.",
+              "setting": "Messages · Sunday, 20:15",
+              "date_label": "Today · 20:15",
+              "viewer": "sam",
+              "participants": [
+                {
+                  "id": "ines",
+                  "name": "Ines",
+                  "initials": "I",
+                  "status": "online",
+                  "tone": "emerald"
+                },
+                {
+                  "id": "sam",
+                  "name": "Sam",
+                  "initials": "S",
+                  "status": "online",
+                  "tone": "cyan"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "ines",
+                  "text": "If we move to Lisbon in September, will you look for a job there?",
+                  "time": "20:16"
+                },
+                {
+                  "from": "sam",
+                  "text": "Yes. If I find something in design, I'll take it.",
+                  "time": "20:16"
+                },
+                {
+                  "from": "ines",
+                  "text": "And if you don't find anything right away?",
+                  "time": "20:17"
+                },
+                {
+                  "from": "sam",
+                  "text": "Then I'll do freelance work. If we have enough savings, we'll be fine.",
+                  "time": "20:18"
+                },
+                {
+                  "from": "ines",
+                  "text": "I'd feel calmer if we had six months of savings.",
+                  "time": "20:18"
+                },
+                {
+                  "from": "sam",
+                  "text": "Me too. If I were you, I'd start saving now.",
+                  "time": "20:19"
+                },
+                {
+                  "from": "ines",
+                  "text": "I already am. If everything goes well, we'll move in the spring.",
+                  "time": "20:20"
+                },
+                {
+                  "from": "sam",
+                  "text": "If I had more courage, I'd book the tickets today.",
+                  "time": "20:21"
+                },
+                {
+                  "from": "ines",
+                  "text": "You don't have to book them today. We still have time.",
+                  "time": "20:21"
+                },
+                {
+                  "from": "sam",
+                  "text": "I know. But if we wait too long, prices will go up.",
+                  "time": "20:22"
+                },
+                {
+                  "from": "ines",
+                  "text": "Then let's check them tomorrow. Unless you change your mind.",
+                  "time": "20:23"
+                },
+                {
+                  "from": "sam",
+                  "text": "I won't. If I say yes, I mean yes.",
+                  "time": "20:23",
+                  "reaction": "✈️ 1"
+                }
+              ],
+              "grammar_notes": [
+                {
+                  "phrase": "If we move... we'll be fine",
+                  "explanation": "First Conditional: реальный план на будущее."
+                },
+                {
+                  "phrase": "If I had more courage, I'd book",
+                  "explanation": "Second Conditional: воображаемая ситуация в настоящем."
+                },
+                {
+                  "phrase": "Unless you change your mind",
+                  "explanation": "unless = if not, поэтому после него не ставим not."
+                }
+              ]
+            },
+            {
+              "type": "quiz",
+              "nav_label": "Тест",
+              "eyebrow": "04 · KNOWLEDGE CHECK",
+              "title": "Condition check",
+              "intro": "Четыре условия — четыре решения. Проверь форму после if и вторую часть.",
+              "questions": [
+                {
+                  "question": "If it ___ tomorrow, we'll cancel the picnic.",
+                  "options": [
+                    "will rain",
+                    "rains",
+                    "rained"
+                  ],
+                  "correct": 1,
+                  "explanation": "First Conditional: после if — Present Simple, не will."
+                },
+                {
+                  "question": "If I ___ you, I would apologize.",
+                  "options": [
+                    "was",
+                    "were",
+                    "will be"
+                  ],
+                  "correct": 1,
+                  "explanation": "Устойчивая конструкция If I were you для совета."
+                },
+                {
+                  "question": "She would travel more if she ___ a better salary.",
+                  "options": [
+                    "has",
+                    "had",
+                    "will have"
+                  ],
+                  "correct": 1,
+                  "explanation": "Second Conditional: if + Past Simple, would + V1."
+                },
+                {
+                  "question": "I'll call you unless I ___ late.",
+                  "options": [
+                    "will be",
+                    "am",
+                    "would be"
+                  ],
+                  "correct": 1,
+                  "explanation": "Unless = if not. После него используем Present Simple, как после if."
+                }
+              ]
+            },
+            {
+              "type": "practice_write",
+              "nav_label": "Письмо",
+              "eyebrow": "05 · WRITE LAB",
+              "title": "One plan, one dream",
+              "prompt": "Опиши один реальный план на будущее и одну воображаемую ситуацию, которая могла бы изменить твою жизнь.",
+              "brief": "Используй минимум 2 предложения в First Conditional и 2 в Second Conditional. Добавь одно предложение с unless или If I were you.",
+              "min_words": 90,
+              "max_words": 130,
+              "constraints": [
+                "90+ слов",
+                "First × 2",
+                "Second × 2",
+                "unless / If I were you"
+              ],
+              "placeholder": "If I save enough money, I will...\n\nIf I had more time, I would...\n\nUnless...",
+              "suggestions": [
+                "If I save enough money, I will...",
+                "If I had more time, I would...",
+                "Unless...",
+                "If I were you, I would..."
+              ],
+              "checklist": [
+                "Есть 2 реальных условия: if + present → will.",
+                "Есть 2 воображаемых условия: if + past → would.",
+                "После if нет will.",
+                "Есть unless или If I were you."
+              ],
+              "save_label": "Сохранить работу",
+              "restore_hint": "Черновик хранится только в этом браузере и никуда не отправляется."
+            }
+          ]
+        }
+      ],
+      "stories": [
+        {
+          "id": 1,
+          "title": "The Last Train to Anywhere",
+          "subtitle": "Иногда опоздание — не ошибка, а дверь, которую ты давно не решалась открыть.",
+          "read_time": "7 мин",
+          "level": "B1",
+          "text": "<p>The station clock said 23:58. The last train to the coast was already standing on platform four, its doors open like a patient invitation. Maya ran across the empty hall with her suitcase bouncing behind her. Her ticket was in her pocket, her phone was dead, and the electronic <span class=\"vocab\" data-translation=\"турникет; барьер\" data-pos=\"существительное\">barrier</span> refused to open.</p><p>“Not again,” she whispered. She tried the ticket the other way. The red light stayed red. A recorded <span class=\"vocab\" data-translation=\"объявление\" data-pos=\"существительное\">announcement</span> filled the station: the train would depart in one minute. Maya looked through the glass and saw the last few passengers finding their seats.</p><p>Then the doors closed. The train moved away with a soft, almost polite hum. Maya stood still for a moment, holding her useless ticket. The station became very quiet. She sat down on a cold metal bench and tried not to cry.</p><p>“Missed it too?” asked a voice. An older woman in a green coat sat down beside her. She had a small red suitcase and a paper cup of tea. There was something calm about her, as if missed trains were a normal part of her evening.</p><p>Maya nodded. “I was going to see my sister. She's having a baby. I had this whole speech prepared.” The woman smiled. “The next train is at six. You can still go.”</p><p>“I know,” Maya said. “But I've been putting off this trip for months. First work, then money, then a stupid cold. Maybe I'm not supposed to go.”</p><p>The woman took a slow sip of tea. “The last train is not always the train you need. Sometimes it's just the one that makes the decision for you.” Maya looked at her <span class=\"vocab\" data-translation=\"отражение\" data-pos=\"существительное\">reflection</span> in the dark window. She had spent six years in the city, building a life that looked good from the outside and felt small from the inside. She had a job she did not love, an apartment full of things she did not need, and a <span class=\"vocab\" data-translation=\"привычка\" data-pos=\"существительное\">habit</span> of waiting for the perfect moment.</p><p>“What did you do when you missed a train?” Maya asked. The woman laughed. “I stopped chasing the last one. I started taking the first one.” She opened her bag and offered Maya a piece of chocolate. “You don't have to decide tonight. But you do have to decide eventually.”</p><p>They sat together for an hour. The woman talked about her daughter, a <span class=\"vocab\" data-translation=\"незнакомец\" data-pos=\"существительное\">stranger</span> who had become a friend in a hospital waiting room, and a trip to <span class=\"vocab\" data-translation=\"пункт назначения\" data-pos=\"существительное\">destination</span> she had never planned. Maya listened and, for the first time that day, she laughed.</p><p>At six, the station woke up again. Maya bought a new ticket. She did not choose the coast. She chose the slow train north, toward her sister. In the <span class=\"vocab\" data-translation=\"вагон\" data-pos=\"существительное\">carriage</span>, the seats were <span class=\"vocab\" data-translation=\"пустой\" data-pos=\"прилагательное\">empty</span> and the sky was turning pale. She took out a pen and wrote a note on the back of her ticket: “If you keep waiting for the perfect train, you will miss the one that is already moving.”</p><p>It was not a perfect story. She was still scared. But this time, she did not need a <span class=\"vocab\" data-translation=\"смелость\" data-pos=\"существительное\">courage</span> that arrived all at once. She only needed enough to take the next step. The train began to move, and Maya let the city disappear.</p>"
+        },
+        {
+          "id": 2,
+          "title": "The Yellow Door",
+          "subtitle": "Дом помнит больше, чем мы готовы признать. Особенно если дверь всё ещё того же цвета.",
+          "read_time": "9 мин",
+          "level": "B2",
+          "text": "<p>The house had been empty for eleven months when Clara finally came back. It stood at the end of a quiet <span class=\"vocab\" data-translation=\"район\" data-pos=\"существительное\">neighbourhood</span>, behind a garden that had become more wild than remembered. The <span class=\"vocab\" data-translation=\"знакомый\" data-pos=\"прилагательное\">familiar</span> yellow door was still there, though the paint had begun to peel around the edges.</p><p>She had <span class=\"vocab\" data-translation=\"унаследовала\" data-pos=\"глагол\">inherited</span> the house from her grandmother in the spring. Since then, she had found a hundred reasons not to visit. The <span class=\"vocab\" data-translation=\"ремонт\" data-pos=\"существительное\">renovation</span> would cost money. The memories would cost more. But the estate agent needed an answer by Friday, and Clara could not sell a place she had not entered.</p><p>She <span class=\"vocab\" data-translation=\"колебалась\" data-pos=\"глагол\">hesitated</span> on the doorstep. The key was cold in her hand. Inside, the <span class=\"vocab\" data-translation=\"коридор\" data-pos=\"существительное\">hallway</span> smelled of dust and lavender. Nothing had moved. The same clock hung above the stairs, stopped at ten past four. The same <span class=\"vocab\" data-translation=\"обои\" data-pos=\"существительное\">wallpaper</span> curled in the corners, pale blue with tiny birds.</p><p>Clara walked through the rooms slowly. In the kitchen, she found a cup with a chip on the rim. In the living room, a book lay open on the arm of a chair, as if her grandmother had just gone to make tea. The house felt <span class=\"vocab\" data-translation=\"отсутствующий; отсутствует\" data-pos=\"прилагательное\">absent</span> and present at the same time.</p><p>Upstairs, the small bedroom was full of boxes. Clara had packed them years ago, when her grandmother moved into the care home. She opened one and found her old school notebooks, a dried flower, and a photograph of herself at twelve, standing in front of the yellow door. She had forgotten that photo. She had forgotten how happy she looked.</p><p>Someone knocked gently on the front door. It was Mrs. Bell from next door, older now, carrying a plate of biscuits as if no time had passed. “I thought I saw a light,” she said. “I'm glad you came back.”</p><p>They sat in the kitchen, and Mrs. Bell talked about the <span class=\"vocab\" data-translation=\"соседство; соседи\" data-pos=\"существительное\">neighbourhood</span>: the tree that had fallen in the storm, the family who had moved in across the road, the cat that still slept on the yellow step. “Your grandmother used to say this house was a place for second chances,” she said.</p><p>Clara looked around the room. It was <span class=\"vocab\" data-translation=\"обычный\" data-pos=\"прилагательное\">ordinary</span> — a table, two chairs, a window with a cracked pane. And yet she felt something move inside her. Not grief exactly. Something closer to <span class=\"vocab\" data-translation=\"признание; осознание\" data-pos=\"существительное\">recognition</span>.</p><p>After Mrs. Bell left, Clara opened all the curtains. She wrote a list: repair the roof, paint the door, sort the <span class=\"vocab\" data-translation=\"вещи\" data-pos=\"существительное\">belongings</span>, decide. The last word stayed on the page longer than the others. She did not have <span class=\"vocab\" data-translation=\"разрешение\" data-pos=\"существительное\">permission</span> to keep the past exactly as it was. Nobody did. But perhaps she could keep the house and change what happened inside it.</p><p>On Friday, she called the estate agent. “I'm not selling,” she said. The words came out before she could <span class=\"vocab\" data-translation=\"передумать; изменить решение\" data-pos=\"глагол\">reconsider</span>. That evening, she sat on the floor of the empty living room with a cup of tea and listened to the <span class=\"vocab\" data-translation=\"тишина\" data-pos=\"существительное\">silence</span>. It was not uncomfortable. It was full of <span class=\"vocab\" data-translation=\"память\" data-pos=\"существительное\">memory</span>, but also of space.</p><p>The yellow door would need repainting before winter. Clara chose a slightly brighter shade. Some things, she decided, should be allowed to be <span class=\"vocab\" data-translation=\"узнаваемый\" data-pos=\"прилагательное\">recognizable</span> without staying exactly the same. She opened the door and let the evening air in.</p>"
+        }
+      ],
+      "vocab": []
+    },
+    "tr": {
+      "code": "tr",
+      "label": "Türkçe",
+      "native": "Türkçe",
+      "level": "A1–B1",
+      "lessons": [],
+      "stories": [],
+      "vocab": []
+    },
+    "da": {
+      "code": "da",
+      "label": "Dansk",
+      "native": "Dansk",
+      "level": "A1–B1",
+      "lessons": [],
+      "stories": [],
+      "vocab": []
+    }
+  }
+}
