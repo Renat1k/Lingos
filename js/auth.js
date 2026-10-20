@@ -165,6 +165,10 @@
       if (googleButtonHost) googleButtonHost.hidden = signedIn;
       if (authSignedOut) authSignedOut.hidden = signedIn;
       if (authSignedIn) authSignedIn.hidden = !signedIn;
+      const settingsProfileFields = document.getElementById("settingsProfileFields");
+      const settingsProfileSignedOut = document.getElementById("settingsProfileSignedOut");
+      if (settingsProfileFields) settingsProfileFields.hidden = !signedIn;
+      if (settingsProfileSignedOut) settingsProfileSignedOut.hidden = signedIn;
 
       const noPassword = signedIn && !profile.hasEmailIdentity;
       if (profilePasswordWarning) {

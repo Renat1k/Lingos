@@ -94,13 +94,102 @@
       };
     }
 
+    let showHiddenLessons = false;
+    let coursePanel = "lessons";
+    let errorQuizState = null;
+
+    function getVisibleLessons() {
+      return applyHiddenFlags("lesson", state.lessons.filter((lesson) => !isContentDeleted("lesson", lesson.id)))
+        .filter((lesson) => showHiddenLessons || !lesson.is_hidden);
+    }
+
+    function getHiddenLessonCount() {
+      return state.lessons.filter((lesson) => isContentHidden("lesson", lesson.id) && !isContentDeleted("lesson", lesson.id)).length;
+    }
+
+    function lessonActionMarkup(lesson) {
+      const imported = state.importedLessons.some((item) => Number(item.id) === Number(lesson.id));
+      if (imported) {
+        return `<button class="content-action is-danger" type="button" data-delete-lesson="${Number(lesson.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
+      }
+      return lesson.is_hidden
+        ? `<button class="content-action" type="button" data-show-lesson="${Number(lesson.id)}" data-i18n-aria="show_item" aria-label="${escapeHtml(t("show_item"))}">👁</button>`
+        : `<button class="content-action" type="button" data-hide-lesson="${Number(lesson.id)}" data-i18n-aria="hide_item" aria-label="${escapeHtml(t("hide_item"))}">🙈</button>`;
+    }
+
+    function deleteImportedLesson(lessonId) {
+      const lesson = state.importedLessons.find((item) => Number(item.id) === Number(lessonId));
+      if (!lesson) return;
+      state.importedLessons = state.importedLessons.filter((item) => Number(item.id) !== Number(lessonId));
+      writeJSON(importedLessonsKey(), state.importedLessons);
+      state.lessons = mergeById(state.languagePack?.lessons || [], state.importedLessons);
+      addTombstone("lesson", { id: String(lessonId), language: state.language });
+      showToast(t("lesson_deleted"), "success");
+      renderDashboard();
+    }
+
+    function hideLesson(lessonId) {
+      setContentHidden("lesson", lessonId, true);
+      showHiddenLessons = false;
+      showToast(t("lesson_hidden"), "info");
+      renderDashboard();
+    }
+
+    function showLesson(lessonId) {
+      setContentHidden("lesson", lessonId, false);
+      showToast(t("lesson_shown"), "info");
+      renderDashboard();
+    }
+
+    document.addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-lesson]");
+      if (deleteButton) {
+        event.preventDefault();
+        const lesson = state.lessons.find((item) => Number(item.id) === Number(deleteButton.dataset.deleteLesson));
+        requestConfirmation({
+          title: t("delete_lesson_title"),
+          message: t("delete_lesson_message", { name: lesson?.title || "" }),
+          confirmLabel: t("delete_item")
+        }).then((confirmed) => {
+          if (confirmed) deleteImportedLesson(deleteButton.dataset.deleteLesson);
+        });
+        return;
+      }
+      const hideButton = event.target.closest("[data-hide-lesson]");
+      if (hideButton) {
+        event.preventDefault();
+        hideLesson(hideButton.dataset.hideLesson);
+        return;
+      }
+      const showButton = event.target.closest("[data-show-lesson]");
+      if (showButton) {
+        event.preventDefault();
+        showLesson(showButton.dataset.showLesson);
+        return;
+      }
+      if (event.target.closest("[data-toggle-hidden-lessons]")) {
+        event.preventDefault();
+        showHiddenLessons = !showHiddenLessons;
+        renderDashboard();
+        return;
+      }
+      const panelButton = event.target.closest("[data-course-panel]");
+      if (panelButton) {
+        event.preventDefault();
+        coursePanel = panelButton.dataset.coursePanel === "tests" ? "tests" : "lessons";
+        renderDashboard();
+      }
+    });
+
+
     function getCourseStats() {
-      const cards = state.lessons.map((lesson) => ({ lesson, metrics: getLessonMetrics(lesson) }));
+      const visibleLessons = getVisibleLessons();
+      const cards = visibleLessons.map((lesson) => ({ lesson, metrics: getLessonMetrics(lesson) }));
       const completion = cards.length
         ? Math.round(cards.reduce((sum, item) => sum + item.metrics.percent, 0) / cards.length)
         : 0;
       const uniqueWords = new Set();
-      state.lessons.forEach((lesson) => {
+      visibleLessons.forEach((lesson) => {
         const discovered = new Set(getLessonDiscovered(lesson.id));
         getLessonVocabulary(lesson).forEach((word) => {
           if (discovered.has(word)) uniqueWords.add(word);
@@ -279,6 +368,7 @@
             <div class="lesson-badges">
               ${lesson.badge ? `<span class="lesson-badge">${escapeHtml(lesson.badge)}</span>` : ""}
               <span class="level-badge">${escapeHtml(lesson.level || "A2–B1")}</span>
+              ${lessonActionMarkup(lesson)}
             </div>
           </div>
           <h3 id="dashboard-lesson-${lesson.id}">${escapeHtml(lesson.title || "English lesson")}</h3>
@@ -320,19 +410,25 @@
       state.backTarget = "#dashboard";
 
       const stats = getCourseStats();
+      const visibleLessons = stats.cards.map((item) => item.lesson);
+      const hiddenLessonCount = getHiddenLessonCount();
       const next = stats.cards.find((item) => item.metrics.percent > 0 && item.metrics.percent < 100)
         || stats.cards.find((item) => item.metrics.percent === 0)
         || stats.cards[0];
       const nextLabel = next && next.metrics.percent > 0 ? t("continue_learning") : t("start_first");
       const language = currentLanguage();
       const languageName = languageLabel(language);
-      const isEmptyLanguage = state.lessons.length === 0;
+      const isEmptyLanguage = visibleLessons.length === 0;
 
       app.innerHTML = `
         <section class="dashboard" aria-labelledby="dashboardTitle">
           <div class="dashboard-topline">
             ${renderSectionTabs("course")}
             ${renderLanguageSwitch()}
+          </div>
+          <div class="course-view-tabs" role="tablist" aria-label="${escapeHtml(t("course_panel_lessons"))} / ${escapeHtml(t("course_panel_tests"))}">
+            <button class="course-view-tab${coursePanel === "lessons" ? " is-active" : ""}" type="button" role="tab" aria-selected="${coursePanel === "lessons"}" data-course-panel="lessons">${escapeHtml(t("course_panel_lessons"))}</button>
+            <button class="course-view-tab${coursePanel === "tests" ? " is-active" : ""}" type="button" role="tab" aria-selected="${coursePanel === "tests"}" data-course-panel="tests">${escapeHtml(t("course_panel_tests"))}</button>
           </div>
 
           <div class="dashboard-hero">
@@ -341,7 +437,7 @@
                 <span class="eyebrow-dot" aria-hidden="true"></span>
                 <span>${escapeHtml(languageName.toUpperCase())} // LEARNING_OS</span>
                 <span class="eyebrow-sep" aria-hidden="true">/</span>
-                <span class="eyebrow-level">${state.lessons.length} ${escapeHtml(t("modules").toUpperCase())}</span>
+                <span class="eyebrow-level">${visibleLessons.length} ${escapeHtml(t("modules").toUpperCase())}</span>
               </div>
               <h1 class="dashboard-title" id="dashboardTitle">${escapeHtml(t("dashboard_title_1"))}<br><span class="gradient-text">${escapeHtml(t("dashboard_title_2"))}</span></h1>
               <p class="dashboard-subtitle">${isEmptyLanguage
@@ -402,22 +498,26 @@
             </div>
           </div>
 
-          <section class="dashboard-modules" aria-labelledby="modulesTitle">
+          <section class="dashboard-modules${coursePanel === "tests" ? " is-hidden" : ""}" aria-labelledby="modulesTitle">
             <div class="modules-head">
               <div class="modules-head-copy">
-                <div class="modules-kicker">MODULES / ${pad(state.lessons.length)}</div>
+                <div class="modules-kicker">MODULES / ${pad(visibleLessons.length)}</div>
                 <h2 id="modulesTitle">${escapeHtml(t("modules"))}</h2>
               </div>
-              <span class="modules-count">${stats.cards.filter((item) => item.metrics.percent > 0).length} ${escapeHtml(t("started"))} · ${state.lessons.length} ${escapeHtml(t("total"))}</span>
+              <div class="modules-head-tools">
+                <span class="modules-count">${stats.cards.filter((item) => item.metrics.percent > 0).length} ${escapeHtml(t("started"))} · ${visibleLessons.length} ${escapeHtml(t("total"))}</span>
+                ${hiddenLessonCount || showHiddenLessons ? `<button class="btn btn-quiet content-hidden-toggle" type="button" data-toggle-hidden-lessons>${showHiddenLessons ? escapeHtml(t("hidden_hide")) : escapeHtml(t("hidden_show", { n: hiddenLessonCount }))}</button>` : ""}
+              </div>
             </div>
             <div class="lesson-grid">
               ${stats.cards.length ? stats.cards.map(renderLessonCard).join("") : `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(t("no_lessons_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`}
             </div>
           </section>
+          ${coursePanel === "tests" ? renderTestsPanel() : ""}
         </section>
       `;
 
-      topbarContext.textContent = `${language} / ${pad(state.lessons.length)} modules`;
+      topbarContext.textContent = `${language} / ${pad(visibleLessons.length)} modules`;
       syncLanguageUI();
       progressValue.textContent = pad(stats.completion);
       topProgressBar.style.width = `${stats.completion}%`;
@@ -429,9 +529,209 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Курс завершён на ${stats.completion}%`);
       document.title = `LINGUA/OS — ${languageName} Dashboard`;
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `${language} / ${state.lessons.length} modules · v2.4`;
+      if (footerMeta) footerMeta.textContent = `${language} / ${visibleLessons.length} modules · v2.7`;
       scrollToTopInstant();
     }
+
+    function getQuizAttempts() {
+      const attempts = [];
+      getVisibleLessons().forEach((lesson) => {
+        getLessonBlocks(lesson).forEach((block, blockIndex) => {
+          if (block.type !== "quiz") return;
+          const questions = Array.isArray(block.questions) ? block.questions : [];
+          const result = readJSON(getQuizKey(lesson.id, blockIndex), null);
+          if (!result || !result.answers || typeof result.answers !== "object" || !questions.length) return;
+          const answers = result.answers;
+          const answered = questions.filter((question, questionIndex) => Object.prototype.hasOwnProperty.call(answers, questionIndex)).length;
+          if (!answered) return;
+          let correct = 0;
+          const wrong = [];
+          questions.forEach((question, questionIndex) => {
+            if (!Object.prototype.hasOwnProperty.call(answers, questionIndex)) return;
+            const selected = Number(answers[questionIndex]);
+            if (selected === Number(question.correct)) {
+              correct += 1;
+            } else {
+              wrong.push({ question, questionIndex, selected });
+            }
+          });
+          attempts.push({
+            lessonId: Number(lesson.id),
+            lessonTitle: lesson.title || "",
+            blockIndex,
+            blockTitle: block.title || block.nav_label || t("tests_quiz"),
+            questions,
+            answers,
+            answered,
+            correct,
+            total: questions.length,
+            percent: Math.round((correct / questions.length) * 100),
+            wrong
+          });
+        });
+      });
+      return attempts;
+    }
+
+    function renderTestsPanel() {
+      const attempts = getQuizAttempts();
+      return `
+        <section class="tests-panel" aria-labelledby="testsTitle">
+          <div class="tests-head">
+            <div>
+              <div class="modules-kicker">${escapeHtml(t("tests_kicker"))} / ${pad(attempts.length)}</div>
+              <h2 id="testsTitle">${escapeHtml(t("tests_title"))}</h2>
+            </div>
+            <span class="tests-count">${attempts.length} ${escapeHtml(t("tests_attempted"))}</span>
+          </div>
+          ${attempts.length ? `
+            <div class="tests-list">
+              ${attempts.map((attempt) => `
+                <article class="test-card">
+                  <div class="test-card-copy">
+                    <span class="test-card-kicker">${escapeHtml(attempt.lessonTitle)}</span>
+                    <h3>${escapeHtml(attempt.blockTitle)}</h3>
+                    <p>${escapeHtml(t("tests_questions", { correct: attempt.correct, total: attempt.total }))} · ${attempt.answered}/${attempt.total}</p>
+                  </div>
+                  <div class="test-score">
+                    <strong>${attempt.percent}%</strong>
+                    <span>${escapeHtml(t("tests_percent"))}</span>
+                    <div class="test-score-track" aria-hidden="true"><span style="width:${attempt.percent}%"></span></div>
+                  </div>
+                  <div class="test-actions">
+                    ${attempt.wrong.length
+                      ? `<button class="btn btn-secondary" type="button" data-start-error-quiz="${attempt.lessonId}:${attempt.blockIndex}">${escapeHtml(t("tests_work_errors"))} (${attempt.wrong.length})</button>`
+                      : `<span class="test-no-errors">${escapeHtml(t("tests_no_errors"))}</span>`}
+                  </div>
+                </article>
+              `).join("")}
+            </div>
+          ` : `
+            <div class="tests-empty">
+              <strong>${escapeHtml(t("tests_empty"))}</strong>
+              <p>${escapeHtml(t("tests_empty_hint"))}</p>
+            </div>
+          `}
+        </section>
+      `;
+    }
+
+    function renderErrorQuizQuestion(item, index) {
+      const question = item.question;
+      const options = Array.isArray(question.options) ? question.options : [];
+      return `
+        <article class="error-question" data-error-index="${index}">
+          <div class="error-question-kicker">${escapeHtml(t("tests_question", { n: index + 1, total: errorQuizState.attempt.wrong.length }))}</div>
+          <h3>${escapeHtml(question.question || question.text || "")}</h3>
+          <div class="error-options">
+            ${options.map((option, optionIndex) => `
+              <button class="error-option" type="button" data-error-option="${index}:${optionIndex}">
+                <span class="error-option-letter">${String.fromCharCode(65 + optionIndex)}</span>
+                <span>${escapeHtml(option)}</span>
+              </button>
+            `).join("")}
+          </div>
+          <p class="error-feedback" data-error-feedback hidden></p>
+        </article>
+      `;
+    }
+
+    function openErrorQuiz(lessonId, blockIndex) {
+      const attempt = getQuizAttempts().find((item) => item.lessonId === Number(lessonId) && item.blockIndex === Number(blockIndex));
+      if (!attempt || !attempt.wrong.length) {
+        showToast(t("tests_error_empty"), "info");
+        return;
+      }
+      errorQuizState = { attempt, answers: {}, correct: 0 };
+      const modal = document.getElementById("errorQuizModal");
+      const title = document.getElementById("errorQuizTitle");
+      const body = document.getElementById("errorQuizBody");
+      const result = document.getElementById("errorQuizResult");
+      if (!modal || !body || !result) return;
+      if (title) title.textContent = `${t("tests_error_title")} · ${attempt.blockTitle}`;
+      body.innerHTML = attempt.wrong.map(renderErrorQuizQuestion).join("");
+      result.hidden = true;
+      result.innerHTML = "";
+      if (typeof modal.showModal === "function") modal.showModal();
+      else modal.setAttribute("open", "");
+    }
+
+    function finishErrorQuiz() {
+      if (!errorQuizState) return;
+      const total = errorQuizState.attempt.wrong.length;
+      const percent = total ? Math.round((errorQuizState.correct / total) * 100) : 0;
+      writeJSON(getQuizKey("error", 0), {
+        answers: errorQuizState.answers,
+        correct: errorQuizState.correct,
+        total,
+        percent,
+        completed: true,
+        updatedAt: new Date().toISOString()
+      });
+      const result = document.getElementById("errorQuizResult");
+      if (result) {
+        result.hidden = false;
+        result.innerHTML = `
+          <div class="error-result-mark" aria-hidden="true">${percent >= 70 ? "✓" : "↻"}</div>
+          <strong>${escapeHtml(t("tests_result", { correct: errorQuizState.correct, total, percent }))}</strong>
+          <p>${escapeHtml(t("tests_result_text"))}</p>
+          <button class="btn btn-primary" type="button" data-close-error-quiz>${escapeHtml(t("tests_close"))}</button>
+        `;
+      }
+    }
+
+    function closeErrorQuiz() {
+      const modal = document.getElementById("errorQuizModal");
+      if (!modal) return;
+      if (modal.open && typeof modal.close === "function") modal.close();
+      else modal.removeAttribute("open");
+      errorQuizState = null;
+      if (coursePanel === "tests" && state.view === "dashboard") renderDashboard();
+    }
+
+    document.addEventListener("click", (event) => {
+      const startButton = event.target.closest("[data-start-error-quiz]");
+      if (startButton) {
+        event.preventDefault();
+        const [lessonId, blockIndex] = startButton.dataset.startErrorQuiz.split(":");
+        openErrorQuiz(lessonId, blockIndex);
+        return;
+      }
+      const optionButton = event.target.closest("[data-error-option]");
+      if (optionButton && errorQuizState) {
+        event.preventDefault();
+        const [itemIndex, optionIndex] = optionButton.dataset.errorOption.split(":").map(Number);
+        const item = errorQuizState.attempt.wrong[itemIndex];
+        if (!item || Object.prototype.hasOwnProperty.call(errorQuizState.answers, itemIndex)) return;
+        const questionEl = optionButton.closest(".error-question");
+        const selected = Number(optionIndex);
+        const isCorrect = selected === Number(item.question.correct);
+        errorQuizState.answers[itemIndex] = selected;
+        if (isCorrect) errorQuizState.correct += 1;
+        questionEl?.querySelectorAll("[data-error-option]").forEach((button, index) => {
+          button.disabled = true;
+          if (index === Number(item.question.correct)) button.classList.add("is-correct");
+          if (index === selected && !isCorrect) button.classList.add("is-wrong");
+        });
+        const feedback = questionEl?.querySelector("[data-error-feedback]");
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.className = `error-feedback ${isCorrect ? "is-correct" : "is-wrong"}`;
+          const explanation = item.question.explanation || item.question.why || "";
+          feedback.textContent = `${isCorrect ? t("tests_correct") : t("tests_wrong")}${explanation ? ` · ${explanation}` : ""}`;
+        }
+        if (Object.keys(errorQuizState.answers).length >= errorQuizState.attempt.wrong.length) finishErrorQuiz();
+        return;
+      }
+      if (event.target.closest("[data-close-error-quiz]") || event.target.closest("#errorQuizClose")) {
+        event.preventDefault();
+        closeErrorQuiz();
+      }
+    });
+
+    document.getElementById("errorQuizModal")?.addEventListener("click", (event) => {
+      if (event.target.id === "errorQuizModal") closeErrorQuiz();
+    });
 
     function blockHead(block, index) {
       const meta = TYPE_META[block.type] || { tag: "BLOCK" };

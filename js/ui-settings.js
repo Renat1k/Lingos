@@ -53,6 +53,26 @@
 
     /* ---------- settings / reset ---------- */
     let resetConfirmTimer = null;
+    let activeSettingsTab = "profile";
+
+    function setSettingsTab(tab) {
+      const allowed = ["profile", "appearance", "system"];
+      activeSettingsTab = allowed.includes(tab) ? tab : "profile";
+      const body = document.querySelector(".settings-body");
+      if (body) body.dataset.settingsTab = activeSettingsTab;
+      document.querySelectorAll(".settings-tab[data-settings-tab]").forEach((button) => {
+        const active = button.dataset.settingsTab === activeSettingsTab;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.setAttribute("tabindex", active ? "0" : "-1");
+      });
+    }
+
+    document.addEventListener("click", (event) => {
+      const tabButton = event.target.closest(".settings-tab[data-settings-tab]");
+      if (!tabButton) return;
+      setSettingsTab(tabButton.dataset.settingsTab);
+    });
 
     function setResetConfirmation(show) {
       window.clearTimeout(resetConfirmTimer);
@@ -73,6 +93,7 @@
       if (geminiToggle) geminiToggle.textContent = "👁";
       setGeminiStatus("");
       syncSettingsUI();
+      setSettingsTab(activeSettingsTab);
       setResetConfirmation(false);
       if (!settingsModal.open) {
         if (typeof settingsModal.showModal === "function") settingsModal.showModal();
@@ -91,7 +112,7 @@
     }
 
     function resetAllProgress() {
-      const keepExact = new Set([UI_SETTINGS_KEY, PROFILE_KEY, GEMINI_KEY_STORAGE, CUSTOM_LANGUAGES_KEY, DELETED_KEY]);
+      const keepExact = new Set([UI_SETTINGS_KEY, PROFILE_KEY, GEMINI_KEY_STORAGE, CUSTOM_LANGUAGES_KEY, DELETED_KEY, HIDDEN_CONTENT_KEY]);
       const contentPattern = /^lingua_[a-z0-9-]+_(vocab|imported_lessons|imported_stories)$/;
       try {
         const keys = [];

@@ -2,6 +2,31 @@
 "use strict";
 
     /* ---------- vocabulary vault ---------- */
+    let reviewScope = "all";
+    let reviewQueue = [];
+    let reviewIndex = 0;
+
+    function getDueReviewCount() {
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      return state.vocab.filter((word) => {
+        if (!word.next_review_at) return true;
+        const due = Date.parse(word.next_review_at);
+        return Number.isNaN(due) || due <= endOfDay.getTime();
+      }).length;
+    }
+
+    function getReviewWords() {
+      return state.vocab.filter((word) => {
+        if (reviewScope === "favorites") return Boolean(word.is_favorite);
+        if (reviewScope === "tag") {
+          const tag = document.getElementById("reviewTag")?.value || "";
+          return Boolean(tag) && word.tags.includes(tag);
+        }
+        return true;
+      });
+    }
+
     function normalizeVocabWord(raw, fallbackId) {
       if (!raw || typeof raw !== "object") return null;
       const word = String(raw.word || "").trim();
@@ -16,6 +41,9 @@
           ? [...new Set(raw.tags.map((tag) => String(tag).trim()).filter(Boolean))]
           : [],
         is_favorite: Boolean(raw.is_favorite),
+        box_level: Math.min(5, Math.max(1, Number(raw.box_level) || 1)),
+        next_review_at: String(raw.next_review_at || ""),
+        example: String(raw.example || "").trim(),
         updated_at: String(raw.updated_at || "")
       };
     }
@@ -161,6 +189,7 @@
       setText("vocabConsoleTitle", `${total} ${t("words")}`);
       setText("vocabConsoleMeta", `${favorites} ${t("starred")} · ${tags.length} ${t("tags")}`);
       setText("vocabSwitchCount", String(total));
+      setText("reviewDueBadge", t("review_due", { n: getDueReviewCount() }));
       const ring = document.getElementById("vocabFavoriteRing");
       if (ring) ring.style.setProperty("--p", favoritePercent);
       const tagLines = document.getElementById("vocabTagLines");
@@ -267,9 +296,11 @@
               </div>
               <h1 class="dashboard-title" id="vocabTitle">${escapeHtml(t("vocab_title_1"))}<br><span class="gradient-text">${escapeHtml(t("vocab_title_2"))}</span></h1>
               <p class="dashboard-subtitle">${escapeHtml(t("vocab_subtitle", { lang: languageLabel(currentLanguage()) }))}</p>
+              <p class="review-due-badge" id="reviewDueBadge">${escapeHtml(t("review_due", { n: getDueReviewCount() }))}</p>
               <div class="dashboard-actions">
-                <button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button>
-                <button class="btn btn-secondary" type="button" data-export-vocab>${icon("download")} ${escapeHtml(t("download_vocab"))}</button>
+                <button class="btn btn-primary" type="button" data-open-review>${escapeHtml(t("review_button"))}</button>
+                <button class="btn btn-secondary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button>
+                <button class="btn btn-quiet" type="button" data-export-vocab>${icon("download")} ${escapeHtml(t("download_vocab"))}</button>
               </div>
             </div>
 
@@ -356,9 +387,241 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Избранное: ${favorites} из ${total}`);
       document.title = `LINGUA/OS — ${languageLabel(currentLanguage())} Vocabulary`;
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `lexicon / ${currentLanguage()} / ${total} words · v2.4`;
+      if (footerMeta) footerMeta.textContent = `lexicon / ${currentLanguage()} / ${total} words · v2.7`;
       scrollToTopInstant();
     }
+
+    function reviewById(id) {
+      return state.vocab.find((word) => Number(word.id) === Number(id));
+    }
+
+    function reviewSetupStatus() {
+      const status = document.getElementById("reviewSetupStatus");
+      if (!status) return;
+      const words = getReviewWords();
+      status.textContent = words.length ? `${words.length} ${t("words")}` : t("review_empty");
+    }
+
+    function setReviewScope(scope) {
+      reviewScope = ["all", "favorites", "tag"].includes(scope) ? scope : "all";
+      document.querySelectorAll("[data-review-scope]").forEach((button) => {
+        const active = button.dataset.reviewScope === reviewScope;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      const tagField = document.getElementById("reviewTag");
+      if (tagField) tagField.disabled = reviewScope !== "tag";
+      reviewSetupStatus();
+    }
+
+    function renderReviewSetup() {
+      const tagSelect = document.getElementById("reviewTag");
+      if (tagSelect) {
+        const tags = getVocabTags();
+        const previous = tagSelect.value;
+        tagSelect.innerHTML = tags.map(([tag, count]) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)} (${count})</option>`).join("");
+        if (tags.some(([tag]) => tag === previous)) tagSelect.value = previous;
+      }
+      setReviewScope(reviewScope);
+    }
+
+    function openReviewModal() {
+      const modal = document.getElementById("reviewModal");
+      if (!modal) return;
+      document.getElementById("reviewSetup")?.removeAttribute("hidden");
+      const session = document.getElementById("reviewSession");
+      if (session) session.hidden = true;
+      const complete = document.getElementById("reviewComplete");
+      if (complete) complete.hidden = true;
+      renderReviewSetup();
+      if (typeof modal.showModal === "function") modal.showModal();
+      else modal.setAttribute("open", "");
+    }
+
+    function closeReviewModal() {
+      const modal = document.getElementById("reviewModal");
+      if (!modal) return;
+      if (modal.open && typeof modal.close === "function") modal.close();
+      else modal.removeAttribute("open");
+      reviewQueue = [];
+      reviewIndex = 0;
+    }
+
+    function renderReviewCard() {
+      const id = reviewQueue[reviewIndex];
+      const word = reviewById(id);
+      if (!word) {
+        reviewIndex += 1;
+        renderReviewCard();
+        return;
+      }
+      const card = document.getElementById("reviewCard");
+      const position = document.getElementById("reviewPosition");
+      const level = document.getElementById("reviewLevel");
+      if (position) position.textContent = t("review_progress", { current: reviewIndex + 1, total: reviewQueue.length });
+      if (level) level.textContent = t("review_level", { level: word.box_level || 1 });
+      if (card) {
+        card.classList.remove("is-flipped");
+        card.setAttribute("aria-pressed", "false");
+      }
+      const front = document.getElementById("reviewFrontWord");
+      if (front) front.textContent = word.word;
+      const back = document.getElementById("reviewBackTranslation");
+      if (back) back.textContent = word.translation;
+      const context = document.getElementById("reviewContext");
+      if (context) context.textContent = word.description ? `${t("review_context")}: ${word.description}` : "";
+      const example = document.getElementById("reviewExample");
+      if (example) example.textContent = word.example ? `${t("review_example")}: ${word.example}` : "";
+      const tags = document.getElementById("reviewTags");
+      if (tags) tags.innerHTML = word.tags.map((tag) => `<span class="review-tag">#${escapeHtml(tag)}</span>`).join("");
+      const speak = document.getElementById("reviewSpeak");
+      if (speak) speak.hidden = !("speechSynthesis" in window);
+    }
+
+    function startReview() {
+      const words = getReviewWords();
+      if (!words.length) {
+        const status = document.getElementById("reviewSetupStatus");
+        if (status) status.textContent = t("review_empty_hint");
+        return;
+      }
+      reviewQueue = words.map((word) => word.id);
+      reviewIndex = 0;
+      document.getElementById("reviewSetup")?.setAttribute("hidden", "");
+      const session = document.getElementById("reviewSession");
+      if (session) session.hidden = false;
+      const complete = document.getElementById("reviewComplete");
+      if (complete) complete.hidden = true;
+      renderReviewCard();
+    }
+
+    function advanceReview() {
+      reviewIndex += 1;
+      if (reviewIndex >= reviewQueue.length) {
+        const session = document.getElementById("reviewSession");
+        if (session) session.hidden = true;
+        const complete = document.getElementById("reviewComplete");
+        if (complete) complete.hidden = false;
+        updateVocabStats();
+        return;
+      }
+      renderReviewCard();
+    }
+
+    function answerReview(remember) {
+      const word = reviewById(reviewQueue[reviewIndex]);
+      if (!word) {
+        advanceReview();
+        return;
+      }
+      const previousLevel = Math.min(5, Math.max(1, Number(word.box_level) || 1));
+      const level = remember ? Math.min(5, previousLevel + 1) : Math.max(1, previousLevel - 1);
+      const days = REVIEW_INTERVALS[level - 1] || 1;
+      word.box_level = level;
+      word.next_review_at = new Date(Date.now() + days * 86400000).toISOString();
+      word.updated_at = new Date().toISOString();
+      saveVocabulary();
+      if (!remember) {
+        reviewQueue.splice(Math.min(reviewQueue.length, reviewIndex + 4), 0, word.id);
+      }
+      updateVocabStats();
+      advanceReview();
+    }
+
+    function speakReviewWord() {
+      if (!("speechSynthesis" in window)) return;
+      const word = reviewById(reviewQueue[reviewIndex]);
+      if (!word) return;
+      const languageMap = { en: "en-US", tr: "tr-TR", da: "da-DK" };
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word.word);
+      utterance.lang = languageMap[state.language] || state.language || "en-US";
+      window.speechSynthesis.speak(utterance);
+    }
+
+    document.addEventListener("click", (event) => {
+      if (event.target.closest("[data-open-review]")) {
+        event.preventDefault();
+        openReviewModal();
+        return;
+      }
+      if (event.target.closest("#reviewClose")) {
+        event.preventDefault();
+        closeReviewModal();
+        return;
+      }
+      const scopeButton = event.target.closest("[data-review-scope]");
+      if (scopeButton) {
+        event.preventDefault();
+        setReviewScope(scopeButton.dataset.reviewScope);
+        return;
+      }
+      if (event.target.closest("#reviewStart")) {
+        event.preventDefault();
+        startReview();
+        return;
+      }
+      if (event.target.closest("#reviewForgot")) {
+        event.preventDefault();
+        answerReview(false);
+        return;
+      }
+      if (event.target.closest("#reviewRemember")) {
+        event.preventDefault();
+        answerReview(true);
+        return;
+      }
+      if (event.target.closest("#reviewSpeak")) {
+        event.preventDefault();
+        event.stopPropagation();
+        speakReviewWord();
+        return;
+      }
+      if (event.target.closest("#reviewRestart")) {
+        event.preventDefault();
+        const complete = document.getElementById("reviewComplete");
+        if (complete) complete.hidden = true;
+        const setup = document.getElementById("reviewSetup");
+        if (setup) setup.hidden = false;
+        renderReviewSetup();
+        return;
+      }
+      const card = event.target.closest("#reviewCard");
+      if (card) {
+        card.classList.toggle("is-flipped");
+        card.setAttribute("aria-pressed", String(card.classList.contains("is-flipped")));
+      }
+    });
+
+    document.getElementById("reviewTag")?.addEventListener("change", reviewSetupStatus);
+    document.getElementById("reviewCard")?.addEventListener("keydown", (event) => {
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        event.currentTarget.click();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const modal = document.getElementById("reviewModal");
+      if (!modal?.open) return;
+      if (event.target.closest("button, input, select, textarea")) return;
+      const session = document.getElementById("reviewSession");
+      if (!session || session.hidden) return;
+      if (event.code === "Space") {
+        event.preventDefault();
+        document.getElementById("reviewCard")?.click();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        answerReview(false);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        answerReview(true);
+      }
+    });
+
+    document.getElementById("reviewModal")?.addEventListener("click", (event) => {
+      if (event.target.id === "reviewModal") closeReviewModal();
+    });
 
     function downloadVocabulary() {
       const language = currentLanguage();

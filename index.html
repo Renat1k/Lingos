@@ -11,7 +11,7 @@
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <link rel="stylesheet" href="css/style.css?v=2.6" />
+  <link rel="stylesheet" href="css/style.css?v=2.7" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -179,18 +179,66 @@
         </button>
       </header>
 
-      <div class="settings-body">
-        <section class="settings-section" aria-labelledby="accountSettingLabel">
+      <div class="settings-body" data-settings-tab="profile">
+        <div class="settings-tabs" role="tablist" aria-label="Settings sections" data-i18n-aria="settings_title">
+          <button class="settings-tab is-active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings_tab_profile">👤 Профиль</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="appearance" data-i18n="settings_tab_appearance">🎨 Оформление</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="system" data-i18n="settings_tab_system">⚙️ Система</button>
+        </div>
+
+        <section class="settings-section" data-settings-group="profile" aria-labelledby="accountSettingLabel">
           <div class="settings-section-head">
             <span id="accountSettingLabel" data-i18n="profile_account">Профиль</span>
             <span class="profile-warning" id="profilePasswordWarning" hidden aria-label="Пароль не задан" title="Пароль не задан">!</span>
           </div>
           <p class="settings-help" id="profilePasswordWarningText" data-i18n="profile_password_not_set_hint" hidden>Задай пароль, чтобы входить по e-mail.</p>
-          <p class="settings-help" data-i18n="profile_settings_hint">Никнейм и аватар хранятся в user_metadata Supabase.</p>
-          <button class="btn btn-quiet" type="button" data-open-profile data-i18n="open_profile">Открыть профиль</button>
+
+          <div id="settingsProfileSignedOut">
+            <p class="settings-help" data-i18n="settings_profile_signed_out">Войди в профиль, чтобы менять никнейм, аватар и пароль.</p>
+            <button class="btn btn-quiet" type="button" data-open-profile data-i18n="open_profile">Открыть профиль</button>
+          </div>
+
+          <div id="settingsProfileFields" hidden>
+            <p class="settings-help" data-i18n="profile_settings_hint">Никнейм и аватар хранятся в user_metadata Supabase.</p>
+            <form class="profile-form" id="profileForm" novalidate>
+              <label class="profile-field">
+                <span data-i18n="profile_nickname">Никнейм</span>
+                <input id="profileNickname" type="text" maxlength="48" autocomplete="nickname" data-i18n-placeholder="profile_nickname" placeholder="Никнейм" />
+              </label>
+              <label class="profile-field">
+                <span data-i18n="profile_avatar_url">URL аватара</span>
+                <input id="profileAvatarUrl" type="url" maxlength="500" autocomplete="photo" data-i18n-placeholder="profile_avatar_url" placeholder="https://…" />
+              </label>
+              <div class="avatar-presets-wrap">
+                <span class="profile-field-label" data-i18n="profile_avatar_presets">Быстрый аватар</span>
+                <div class="avatar-presets" id="avatarPresets" role="group" aria-label="Avatar presets" data-i18n-aria="profile_avatar_presets">
+                  <button class="avatar-preset" type="button" data-avatar-emoji="" aria-label="Initials">Aa</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="🦊" aria-label="Fox">🦊</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="🐼" aria-label="Panda">🐼</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="🚀" aria-label="Rocket">🚀</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="🌊" aria-label="Wave">🌊</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="⚡" aria-label="Bolt">⚡</button>
+                  <button class="avatar-preset" type="button" data-avatar-emoji="🌙" aria-label="Moon">🌙</button>
+                </div>
+              </div>
+              <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">?</div>
+              <p class="auth-status" id="profileStatus" aria-live="polite"></p>
+              <button class="btn btn-primary" id="profileSave" type="submit" data-i18n="profile_save">Сохранить профиль</button>
+            </form>
+
+            <form class="password-form" id="passwordForm" novalidate>
+              <label class="profile-field">
+                <span id="profilePasswordLabel" data-i18n="profile_password">Пароль</span>
+                <input id="profilePassword" type="password" autocomplete="new-password" minlength="6" data-i18n-placeholder="auth_password" placeholder="Пароль" />
+              </label>
+              <p class="settings-help" id="profilePasswordHint" data-i18n="profile_password_not_set_hint">Задай пароль, чтобы входить по e-mail.</p>
+              <p class="auth-status" id="profilePasswordStatus" aria-live="polite"></p>
+              <button class="btn btn-quiet" id="profilePasswordSave" type="button" data-i18n="profile_password_set">Задать пароль</button>
+            </form>
+          </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="fontSettingLabel">
+        <section class="settings-section" data-settings-group="appearance" aria-labelledby="fontSettingLabel">
           <div class="settings-section-head">
             <span id="fontSettingLabel" data-i18n="text_size">Размер текста</span>
             <span class="settings-hint">READABILITY</span>
@@ -209,7 +257,7 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="themeSettingLabel">
+        <section class="settings-section" data-settings-group="appearance" aria-labelledby="themeSettingLabel">
           <div class="settings-section-head">
             <span id="themeSettingLabel" data-i18n="theme">Тема оформления</span>
             <span class="settings-hint">4 PRESETS</span>
@@ -238,7 +286,7 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="uiLanguageLabel">
+        <section class="settings-section" data-settings-group="appearance" aria-labelledby="uiLanguageLabel">
           <div class="settings-section-head">
             <span id="uiLanguageLabel" data-i18n="app_language">Язык интерфейса</span>
             <span class="settings-hint" data-i18n="ui_locale">UI LOCALE</span>
@@ -251,7 +299,7 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="languageSettingLabel">
+        <section class="settings-section" data-settings-group="system" aria-labelledby="languageSettingLabel">
           <div class="settings-section-head">
             <span id="languageSettingLabel" data-i18n="learning_language">Язык обучения</span>
             <span class="settings-hint">3 ACTIVE</span>
@@ -280,7 +328,7 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="geminiSettingLabel">
+        <section class="settings-section" data-settings-group="system" aria-labelledby="geminiSettingLabel">
           <div class="settings-section-head">
             <span id="geminiSettingLabel" data-i18n="gemini_title">Google Gemini API</span>
             <span class="settings-hint">AI / API</span>
@@ -296,7 +344,7 @@
           </div>
         </section>
 
-        <section class="settings-section settings-danger" aria-labelledby="resetSettingLabel">
+        <section class="settings-section settings-danger" data-settings-group="system" aria-labelledby="resetSettingLabel">
           <div class="settings-section-head">
             <span id="resetSettingLabel" data-i18n="reset_progress">Сброс прогресса</span>
             <span class="settings-hint">DANGER ZONE</span>
@@ -314,7 +362,7 @@
           </div>
         </section>
 
-        <p class="settings-footnote" data-i18n="footnote">LINGUA/OS · data stays in this browser · no tracking</p>
+        <p class="settings-footnote" data-settings-group="system" data-i18n="footnote">LINGUA/OS · data stays in this browser · no tracking</p>
       </div>
     </div>
   </dialog>
@@ -474,42 +522,6 @@
             <p id="profileSyncNote" data-i18n="cloud_not_ready_hint">Выполни SQL-миграцию, чтобы включить синхронизацию по user_id. Данные пока локальны.</p>
           </div>
 
-          <form class="profile-form" id="profileForm" novalidate>
-            <label class="profile-field">
-              <span data-i18n="profile_nickname">Никнейм</span>
-              <input id="profileNickname" type="text" maxlength="48" autocomplete="nickname" data-i18n-placeholder="profile_nickname" placeholder="Никнейм" />
-            </label>
-            <label class="profile-field">
-              <span data-i18n="profile_avatar_url">URL аватара</span>
-              <input id="profileAvatarUrl" type="url" maxlength="500" autocomplete="photo" data-i18n-placeholder="profile_avatar_url" placeholder="https://…" />
-            </label>
-            <div class="avatar-presets-wrap">
-              <span class="profile-field-label" data-i18n="profile_avatar_presets">Быстрый аватар</span>
-              <div class="avatar-presets" id="avatarPresets" role="group" aria-label="Avatar presets" data-i18n-aria="profile_avatar_presets">
-                <button class="avatar-preset" type="button" data-avatar-emoji="" aria-label="Initials">Aa</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="🦊" aria-label="Fox">🦊</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="🐼" aria-label="Panda">🐼</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="🚀" aria-label="Rocket">🚀</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="🌊" aria-label="Wave">🌊</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="⚡" aria-label="Bolt">⚡</button>
-                <button class="avatar-preset" type="button" data-avatar-emoji="🌙" aria-label="Moon">🌙</button>
-              </div>
-            </div>
-            <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">?</div>
-            <p class="auth-status" id="profileStatus" aria-live="polite"></p>
-            <button class="btn btn-primary" id="profileSave" type="submit" data-i18n="profile_save">Сохранить профиль</button>
-          </form>
-
-          <form class="password-form" id="passwordForm" novalidate>
-            <label class="profile-field">
-              <span id="profilePasswordLabel" data-i18n="profile_password">Пароль</span>
-              <input id="profilePassword" type="password" autocomplete="new-password" minlength="6" data-i18n-placeholder="auth_password" placeholder="Пароль" />
-            </label>
-            <p class="settings-help" id="profilePasswordHint" data-i18n="profile_password_not_set_hint">Задай пароль, чтобы входить по e-mail.</p>
-            <p class="auth-status" id="profilePasswordStatus" aria-live="polite"></p>
-            <button class="btn btn-quiet" id="profilePasswordSave" type="button" data-i18n="profile_password_set">Задать пароль</button>
-          </form>
-
           <button class="btn btn-quiet profile-signout" id="profileSignOut" type="button" data-i18n="sign_out" hidden>Выйти из профиля</button>
           <p class="profile-disclaimer" data-i18n="profile_disclaimer">Пароль хранится только в Supabase Auth. Ключ Gemini остаётся локальным.</p>
         </div>
@@ -595,21 +607,102 @@
     </div>
   </dialog>
 
+  <dialog class="review-modal" id="reviewModal" aria-labelledby="reviewTitle">
+    <div class="review-panel">
+      <header class="review-head">
+        <div>
+          <span class="settings-kicker"><i aria-hidden="true"></i> <span data-i18n="review_kicker">LEITNER / REVIEW</span></span>
+          <h2 id="reviewTitle" data-i18n="review_title">Флеш-карточки</h2>
+        </div>
+        <button class="icon-btn" id="reviewClose" type="button" data-i18n-aria="review_close" aria-label="Закрыть">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+
+      <div class="review-setup" id="reviewSetup">
+        <p class="review-setup-title" data-i18n="review_setup">Что повторить сегодня?</p>
+        <p class="review-setup-subtitle" data-i18n="review_choose_scope">Выбери категорию</p>
+        <div class="review-scopes" role="group" aria-label="Review categories" data-i18n-aria="review_choose_scope">
+          <button class="review-scope is-active" type="button" data-review-scope="all" aria-pressed="true" data-i18n="review_all">Все слова</button>
+          <button class="review-scope" type="button" data-review-scope="favorites" aria-pressed="false" data-i18n="review_favorites">⭐ Только избранное</button>
+          <button class="review-scope" type="button" data-review-scope="tag" aria-pressed="false" data-i18n="review_by_tag">По тегам</button>
+        </div>
+        <label class="review-tag-field">
+          <span data-i18n="review_tag">Тег</span>
+          <select id="reviewTag" class="review-tag-select" aria-label="Review tag" data-i18n-aria="review_tag"></select>
+        </label>
+        <p class="review-setup-status" id="reviewSetupStatus" aria-live="polite"></p>
+        <button class="btn btn-primary" id="reviewStart" type="button" data-i18n="review_start">Начать повторение</button>
+      </div>
+
+      <div class="review-session" id="reviewSession" hidden>
+        <div class="review-progress-row">
+          <span id="reviewPosition" class="review-position">1 / 1</span>
+          <span id="reviewLevel" class="review-level"></span>
+        </div>
+        <div class="flashcard" id="reviewCard" tabindex="0" role="button" aria-pressed="false" aria-label="Flip flashcard" data-i18n-aria="review_flip">
+          <div class="flashcard-inner">
+            <div class="flashcard-face flashcard-front">
+              <span class="flashcard-label" data-i18n="review_front">Слово</span>
+              <strong id="reviewFrontWord"></strong>
+              <span class="flashcard-hint" data-i18n="review_tap">Нажми, чтобы перевернуть</span>
+            </div>
+            <div class="flashcard-face flashcard-back">
+              <span class="flashcard-label" data-i18n="review_back">Перевод</span>
+              <strong id="reviewBackTranslation"></strong>
+              <p id="reviewContext" class="review-context"></p>
+              <p id="reviewExample" class="review-example"></p>
+              <div id="reviewTags" class="review-tags"></div>
+              <button class="btn btn-quiet review-speak" id="reviewSpeak" type="button" data-i18n="review_speak">Озвучить</button>
+            </div>
+          </div>
+        </div>
+        <div class="review-actions">
+          <button class="btn review-forgot" id="reviewForgot" type="button" data-i18n="review_forgot">🔴 Забыл</button>
+          <button class="btn btn-primary review-remember" id="reviewRemember" type="button" data-i18n="review_remember">🟢 Помню</button>
+        </div>
+      </div>
+
+      <div class="review-complete" id="reviewComplete" hidden>
+        <div class="review-complete-mark" aria-hidden="true">✓</div>
+        <h3 data-i18n="review_complete">Повторение завершено</h3>
+        <p data-i18n="review_complete_hint">Возвращайся завтра — интервалы помогут запомнить.</p>
+        <button class="btn btn-secondary" id="reviewRestart" type="button" data-i18n="review_restart">Ещё раз</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="error-quiz-modal" id="errorQuizModal" aria-labelledby="errorQuizTitle">
+    <div class="error-quiz-panel">
+      <header class="error-quiz-head">
+        <div>
+          <span class="settings-kicker"><i aria-hidden="true"></i> <span data-i18n="error_kicker">ERROR / RETRY</span></span>
+          <h2 id="errorQuizTitle" data-i18n="tests_error_title">Работа над ошибками</h2>
+        </div>
+        <button class="icon-btn" id="errorQuizClose" type="button" data-i18n-aria="tests_close" aria-label="Закрыть">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+      <div class="error-quiz-body" id="errorQuizBody"></div>
+      <div class="error-quiz-result" id="errorQuizResult" hidden></div>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.6"></script>
-  <script src="js/data-default.js?v=2.6"></script>
-  <script src="js/state.js?v=2.6"></script>
-  <script src="js/dom.js?v=2.6"></script>
-  <script src="js/helpers.js?v=2.6"></script>
-  <script src="js/sync.js?v=2.6"></script>
-  <script src="js/auth.js?v=2.6"></script>
-  <script src="js/ai-studio.js?v=2.6"></script>
-  <script src="js/ui-settings.js?v=2.6"></script>
-  <script src="js/vocab.js?v=2.6"></script>
-  <script src="js/stories.js?v=2.6"></script>
-  <script src="js/lessons.js?v=2.6"></script>
-  <script src="js/import.js?v=2.6"></script>
-  <script src="js/app.js?v=2.6"></script>
+  <script src="js/config.js?v=2.7"></script>
+  <script src="js/data-default.js?v=2.7"></script>
+  <script src="js/state.js?v=2.7"></script>
+  <script src="js/dom.js?v=2.7"></script>
+  <script src="js/helpers.js?v=2.7"></script>
+  <script src="js/sync.js?v=2.7"></script>
+  <script src="js/auth.js?v=2.7"></script>
+  <script src="js/ai-studio.js?v=2.7"></script>
+  <script src="js/ui-settings.js?v=2.7"></script>
+  <script src="js/vocab.js?v=2.7"></script>
+  <script src="js/stories.js?v=2.7"></script>
+  <script src="js/lessons.js?v=2.7"></script>
+  <script src="js/import.js?v=2.7"></script>
+  <script src="js/app.js?v=2.7"></script>
 </body>
 </html>

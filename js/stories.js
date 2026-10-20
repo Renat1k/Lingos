@@ -2,6 +2,50 @@
 "use strict";
 
     /* ---------- stories ---------- */
+    let showHiddenStories = false;
+
+    function getHiddenContent() {
+      const stored = readJSON(HIDDEN_CONTENT_KEY, null);
+      const source = stored && typeof stored === "object" ? stored : {};
+      return {
+        lessons: source.lessons && typeof source.lessons === "object" ? source.lessons : {},
+        stories: source.stories && typeof source.stories === "object" ? source.stories : {},
+        updated_at: String(source.updated_at || "")
+      };
+    }
+
+    function hiddenBucketKey(type) {
+      return type === "story" ? "stories" : "lessons";
+    }
+
+    function isContentHidden(type, id) {
+      if (type !== "lesson" && type !== "story") return false;
+      const bucket = getHiddenContent()[hiddenBucketKey(type)];
+      return Boolean(bucket && bucket[String(id)]);
+    }
+
+    function setContentHidden(type, id, hidden) {
+      if (type !== "lesson" && type !== "story") return false;
+      const content = getHiddenContent();
+      const bucket = content[hiddenBucketKey(type)];
+      if (hidden) bucket[String(id)] = true;
+      else delete bucket[String(id)];
+      content.updated_at = new Date().toISOString();
+      return writeJSON(HIDDEN_CONTENT_KEY, content);
+    }
+
+    function isContentDeleted(type, id) {
+      return Boolean(findTombstone(type, { language: state.language, id: String(id) }));
+    }
+
+    function applyHiddenFlags(type, items) {
+      const bucket = getHiddenContent()[hiddenBucketKey(type)] || {};
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        item.is_hidden = Boolean(bucket[String(item.id)]);
+      });
+      return items;
+    }
+
     function storyReadKey(storyId) {
       return languageKey(`story_read_${storyId}`);
     }
@@ -33,8 +77,27 @@
       return matches ? matches.length : 0;
     }
 
+    function getVisibleStories() {
+      return applyHiddenFlags("story", state.stories.filter((story) => !isContentDeleted("story", story.id)))
+        .filter((story) => showHiddenStories || !story.is_hidden);
+    }
+
+    function getHiddenStoryCount() {
+      return state.stories.filter((story) => isContentHidden("story", story.id) && !isContentDeleted("story", story.id)).length;
+    }
+
+    function storyActionMarkup(story) {
+      const imported = state.importedStories.some((item) => Number(item.id) === Number(story.id));
+      if (imported) {
+        return `<button class="content-action is-danger" type="button" data-delete-story="${Number(story.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
+      }
+      return story.is_hidden
+        ? `<button class="content-action" type="button" data-show-story="${Number(story.id)}" data-i18n-aria="show_item" aria-label="${escapeHtml(t("show_item"))}">👁</button>`
+        : `<button class="content-action" type="button" data-hide-story="${Number(story.id)}" data-i18n-aria="hide_item" aria-label="${escapeHtml(t("hide_item"))}">🙈</button>`;
+    }
+
     function getStoriesStats() {
-      const cards = state.stories.map((story) => ({
+      const cards = getVisibleStories().map((story) => ({
         story,
         read: isStoryRead(story.id),
         words: getStoryWordCount(story.text),
@@ -46,6 +109,7 @@
         cards,
         readCount,
         total: cards.length,
+        hidden: getHiddenStoryCount(),
         totalMinutes: cards.reduce((sum, card) => sum + card.minutes, 0),
         percent: cards.length ? Math.round((readCount / cards.length) * 100) : 0
       };
@@ -72,6 +136,7 @@
               <span class="story-chip">${escapeHtml(story.level || "B1")}</span>
               ${read ? `<span class="story-chip is-read">${escapeHtml(t("read").toUpperCase())}</span>` : ""}
               <span class="story-chip">${vocab} ${escapeHtml(t("words"))}</span>
+              ${storyActionMarkup(story)}
             </div>
             <h2 id="story-card-title-${story.id}">${escapeHtml(story.title || "Story")}</h2>
             <p class="story-card-subtitle">${escapeHtml(story.subtitle || "")}</p>
@@ -179,7 +244,10 @@
                 <h2 id="storyListTitle">${escapeHtml(t("stories_section"))}</h2>
                 <p>${escapeHtml(t("stories_subtitle"))}</p>
               </div>
-              <span class="stories-section-count">${stats.readCount} ${escapeHtml(t("read"))} · ${stats.total} ${escapeHtml(t("total"))}</span>
+              <div class="stories-section-tools">
+                <span class="stories-section-count">${stats.readCount} ${escapeHtml(t("read"))} · ${stats.total} ${escapeHtml(t("total"))}</span>
+                ${stats.hidden || showHiddenStories ? `<button class="btn btn-quiet content-hidden-toggle" type="button" data-toggle-hidden-stories>${showHiddenStories ? escapeHtml(t("hidden_hide")) : escapeHtml(t("hidden_show", { n: stats.hidden }))}</button>` : ""}
+              </div>
             </div>
             <div class="story-list">
               ${stats.cards.length ? stats.cards.map(renderStoryCard).join("") : `<div class="stories-empty"><strong>${escapeHtml(t("stories_empty_title", { lang: languageLabel(currentLanguage()) }))}</strong><br>${escapeHtml(t("stories_empty_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`}
@@ -198,9 +266,67 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Прочитано ${stats.readCount} из ${stats.total} историй`);
       document.title = "LINGUA/OS — Stories";
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `library / ${stats.total} stories · v2.4`;
+      if (footerMeta) footerMeta.textContent = `library / ${stats.total} stories · v2.7`;
       scrollToTopInstant();
     }
+
+    function deleteImportedStory(storyId) {
+      const story = state.importedStories.find((item) => Number(item.id) === Number(storyId));
+      if (!story) return;
+      state.importedStories = state.importedStories.filter((item) => Number(item.id) !== Number(storyId));
+      writeJSON(importedStoriesKey(), state.importedStories);
+      state.stories = mergeById(state.languagePack?.stories || [], state.importedStories);
+      addTombstone("story", { id: String(storyId), language: state.language });
+      showToast(t("story_deleted"), "success");
+      renderStoriesHub();
+    }
+
+    function hideStory(storyId) {
+      setContentHidden("story", storyId, true);
+      showHiddenStories = false;
+      showToast(t("story_hidden"), "info");
+      renderStoriesHub();
+    }
+
+    function showStory(storyId) {
+      setContentHidden("story", storyId, false);
+      showToast(t("story_shown"), "info");
+      renderStoriesHub();
+    }
+
+    document.addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-story]");
+      if (deleteButton) {
+        event.preventDefault();
+        const story = state.stories.find((item) => Number(item.id) === Number(deleteButton.dataset.deleteStory));
+        const message = t("delete_story_message", { name: story?.title || "" });
+        requestConfirmation({
+          title: t("delete_story_title"),
+          message,
+          confirmLabel: t("delete_item")
+        }).then((confirmed) => {
+          if (confirmed) deleteImportedStory(deleteButton.dataset.deleteStory);
+        });
+        return;
+      }
+      const hideButton = event.target.closest("[data-hide-story]");
+      if (hideButton) {
+        event.preventDefault();
+        hideStory(hideButton.dataset.hideStory);
+        return;
+      }
+      const showButton = event.target.closest("[data-show-story]");
+      if (showButton) {
+        event.preventDefault();
+        showStory(showButton.dataset.showStory);
+        return;
+      }
+      if (event.target.closest("[data-toggle-hidden-stories]")) {
+        event.preventDefault();
+        showHiddenStories = !showHiddenStories;
+        renderStoriesHub();
+      }
+    });
 
     function renderStory(story) {
       if (typeof state.scrollCleanup === "function") {
@@ -219,7 +345,7 @@
       const read = isStoryRead(story.id);
       const words = getStoryWordCount(story.text);
       const vocab = getStoryVocabularyCount(story.text);
-      const nextStory = state.stories.find((item) => Number(item.id) !== Number(story.id));
+      const nextStory = getVisibleStories().find((item) => Number(item.id) !== Number(story.id));
 
       app.innerHTML = `
         <article class="story-reader" aria-labelledby="storyTitle">
