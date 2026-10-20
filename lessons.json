@@ -1,7 +1,7 @@
 {
   "meta": {
     "app": "LINGUA/OS",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "language": "multi",
     "curriculum": "English · Türkçe · Dansk",
     "mobile_ready": true,
@@ -23,15 +23,27 @@
       "table": "user_data",
       "key": "user_email",
       "data_columns": [
-        "payload",
         "data",
+        "payload",
         "state",
         "content",
         "sync_data",
         "user_data"
       ],
       "offline_fallback": "localStorage"
-    }
+    },
+    "ui_locales": [
+      "en",
+      "da",
+      "tr",
+      "ru"
+    ],
+    "custom_courses": true,
+    "import_templates": [
+      "simple",
+      "master"
+    ],
+    "gemini_model": "gemini-1.5-flash"
   },
   "default_language": "en",
   "languages": {
