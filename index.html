@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#09090b" />
-  <meta name="google-client-id" content="" />
+  <meta name="google-client-id" content="890082377108-ntk8gi1id7utibvc4p9emrrod1oildas.apps.googleusercontent.com" />
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <style>
@@ -5502,10 +5502,10 @@
           <span class="signal" aria-hidden="true"></span>
           <p>Google-вход опционален. Он сохраняет имя и фото для будущей синхронизации, но не требуется для учёбы.</p>
         </div>
-        <div class="google-auth-host" id="googleButtonHost"></div>
+        <div class="google-auth-host" id="google-btn-container"></div>
         <p class="google-auth-note" id="googleAuthNote"></p>
         <button class="btn btn-quiet profile-signout" id="profileSignOut" type="button" hidden>Выйти из профиля</button>
-        <p class="profile-disclaimer">Опционально: OAuth Client ID в <code>meta[name="google-client-id"]</code>. Приложение полностью работает без входа и внешних ключей.</p>
+        <p class="profile-disclaimer">Google Auth активирован · OAuth Client ID настроен. Вход опционален, локальный режим работает без аккаунта.</p>
       </div>
     </div>
   </dialog>
@@ -5723,7 +5723,7 @@
     const profileProvider = document.getElementById("profileProvider");
     const profileLanguage = document.getElementById("profileLanguage");
     const profileSyncStatus = document.getElementById("profileSyncStatus");
-    const googleButtonHost = document.getElementById("googleButtonHost");
+    const googleButtonHost = document.getElementById("google-btn-container");
     const googleAuthNote = document.getElementById("googleAuthNote");
     const profileSignOut = document.getElementById("profileSignOut");
     const wordEditorModal = document.getElementById("wordEditorModal");
@@ -6161,6 +6161,10 @@
       }
     }
 
+    function handleCredentialResponse(response) {
+      handleGoogleCredential(response);
+    }
+
     let googleScriptPromise = null;
 
     function loadGoogleIdentityScript() {
@@ -6212,12 +6216,14 @@
       try {
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleCredential,
+          callback: handleCredentialResponse,
           auto_select: false,
           cancel_on_tap_outside: true
         });
-        googleButtonHost.innerHTML = "";
-        google.accounts.id.renderButton(googleButtonHost, {
+        const buttonContainer = document.getElementById("google-btn-container");
+        if (!buttonContainer) return;
+        buttonContainer.innerHTML = "";
+        google.accounts.id.renderButton(buttonContainer, {
           type: "standard",
           theme: "outline",
           size: "large",
@@ -6227,7 +6233,7 @@
           width: 320,
           locale: "ru"
         });
-        googleAuthNote.textContent = "Официальный Google Identity Services. Вход необязателен: прогресс и так хранится локально.";
+        googleAuthNote.textContent = "Официальный Google Identity Services активирован. Вход опционален: прогресс хранится локально.";
       } catch (error) {
         console.error(error);
         googleButtonHost.innerHTML = `<button class="google-button google-button-disabled" type="button" disabled><span class="google-g" aria-hidden="true">G</span><span>Google временно недоступен</span></button>`;
