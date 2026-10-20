@@ -1,7 +1,7 @@
 {
   "meta": {
     "app": "LINGUA/OS",
-    "version": "2.1.0",
+    "version": "2.3.0",
     "language": "multi",
     "curriculum": "English · Türkçe · Dansk",
     "mobile_ready": true,
@@ -16,7 +16,22 @@
       "lessons",
       "stories"
     ],
-    "offline_first": true
+    "offline_first": true,
+    "auth": "google-identity-services",
+    "cloud_sync": {
+      "provider": "supabase",
+      "table": "user_data",
+      "key": "user_email",
+      "data_columns": [
+        "payload",
+        "data",
+        "state",
+        "content",
+        "sync_data",
+        "user_data"
+      ],
+      "offline_fallback": "localStorage"
+    }
   },
   "default_language": "en",
   "languages": {

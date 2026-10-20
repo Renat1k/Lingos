@@ -1,52 +1,99 @@
-# LINGUA/OS 2.1
+# LINGUA/OS 2.3
 
-Статическая мультиязычная учебная среда на HTML + CSS + Vanilla JS. Без сборки, без фреймворков и без backend. Полностью работает локально: контент, прогресс, словарь и настройки живут в браузере.
+Мультиязычная учебная среда на HTML + CSS + Vanilla JS. Локальный режим работает без backend; Google Auth и Supabase Cloud Sync подключаются автоматически.
 
 ## Файлы
 
 | Файл | Назначение |
 |---|---|
-| `index.html` | Всё приложение: разметка, темы, логика, офлайн-снапшот данных |
+| `index.html` | Приложение: темы, уроки, импорт, Google Auth, Cloud Sync, офлайн-снапшот |
 | `lessons.json` | Языковые пакеты и контент |
+| `README.md` | Деплой и настройка интеграций |
 
 ## Деплой на GitHub Pages
 
-1. Положи `index.html` и `lessons.json` в корень репозитория (или в папку, которую публикует Pages).
-2. **Settings → Pages → Build and deployment**: `Deploy from a branch`, выбери ветку и `/ (root)`.
+1. Положи `index.html` и `lessons.json` в корень репозитория.
+2. **Settings → Pages → Build and deployment** → `Deploy from a branch` → `/ (root)`.
 3. Открой `https://<username>.github.io/<repo>/`.
 
-Сборка не нужна. Все пути относительные: `fetch("./lessons.json")` работает и в корне домена, и в подпапке репозитория. При открытии через `file://` автоматически используется встроенный base64-снапшот. Внешних обязательных запросов нет.
+Сборка не нужна. `fetch("./lessons.json")` работает и в подпапке Pages. При `file://` используется встроенный base64-снапшот. Без сети приложение продолжает работать локально.
 
-## Языки
+## Google Auth
 
-В `lessons.json`:
+Client ID установлен в `index.html`:
 
-```json
-{
-  "default_language": "en",
-  "languages": {
-    "en": { "label": "English", "lessons": [], "stories": [], "vocab": [] },
-    "tr": { "label": "Türkçe",  "lessons": [], "stories": [], "vocab": [] },
-    "da": { "label": "Dansk",   "lessons": [], "stories": [], "vocab": [] }
-  }
-}
+```html
+<meta name="google-client-id" content="890082377108-ntk8gi1id7utibvc4p9emrrod1oildas.apps.googleusercontent.com" />
 ```
 
-В поставке:
+GIS загружается по требованию, официальная кнопка отображается в шапке (на широких экранах) и в модальном окне профиля. При успешном входе `name`, `email`, `picture`, `sub` сохраняются в `lingua_profile`.
 
-- **English** — 5 уроков и 2 истории.
-- **Türkçe** — пустые `lessons`, `stories`, `vocab`.
-- **Dansk** — пустые `lessons`, `stories`, `vocab`.
+В Google Cloud Console у OAuth Web Client должны быть разрешены:
 
-Контент добавляется через **«Импортировать JSON»** и попадает только в активный язык.
+- `https://<username>.github.io`
+- `http://localhost:8765` — для локальных проверок.
 
-## Импорт JSON
+## Cloud Sync: Supabase
 
-В модальном окне есть вкладки `vocab`, `lessons`, `stories`:
+Проект уже указан в `index.html`:
 
-- клик по вкладке подставляет валидный шаблон;
-- **«📋 Скопировать шаблон для ИИ»** копирует текущий JSON в буфер;
-- импорт автоматически определяет формат: массив, одиночный объект, ключи `vocab` / `lessons` / `stories`, а также legacy-ключи.
+```html
+<meta name="supabase-url" content="https://zwrptehythksuekxxdih.supabase.co" />
+<meta name="supabase-anon-key" content="sb_publishable_ttebq8FX0aTMnyddhtp3kQ_izHfEB8W" />
+```
+
+SDK подключён через CDN:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+```
+
+Синхронизация работает по Google email, без Supabase Auth. Нужна таблица `public.user_data` с ключом `user_email`:
+
+```sql
+create table if not exists public.user_data (
+  user_email text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_data enable row level security;
+
+create policy "lingua_user_data_access"
+on public.user_data
+for all
+to anon
+using (true)
+with check (true);
+```
+
+Если таблица создана с колонкой `payload`, `state`, `content`, `sync_data` или `user_data` вместо `data`, клиент автоматически определит её при чтении/записи.
+
+Важно:
+
+- клиент использует `upsert` по `user_email`;
+- таблица должна быть доступна роли `anon` (publishable key);
+- схема с доступом по одному email не заменяет серверную авторизацию — это персональный/демо-режим;
+- при отсутствии таблицы, сети или ключей приложение остаётся в локальном режиме.
+
+## Синхронизация
+
+Если профиль Google есть в `lingua_profile`:
+
+- при загрузке выполняется попытка чтения строки `user_data` по email;
+- локальные и облачные данные сливаются: словари и импортированные уроки/истории объединяются, остальные ключи обновляются из облака;
+- после слияния выполняется обратная запись;
+- любые изменения (`writeJSON` / `removeStored`) запускают debounce-сохранение через 850 мс;
+- Top Bar показывает `⚪ Локальный режим`, `🟡 Сохранение...` или `🟢 Синхронизировано`;
+- офлайн-изменения сохраняются в `localStorage`, а при возврате сети отправляются в Supabase.
+
+## Импорт
+
+В модальном окне работают вкладки `vocab`, `lessons`, `stories`:
+
+- выбор вкладки подставляет валидный шаблон;
+- **«📋 Скопировать шаблон для ИИ»** копирует текущий JSON;
+- импорт автоматически распознаёт массив, одиночный объект и legacy-ключи (`vocabulary`, `words`, `turkish_vocab`, `lesson`, `story`, `word`, `content_blocks`).
 
 ```json
 {
@@ -56,87 +103,32 @@
 }
 ```
 
-Также принимаются `vocabulary`, `words`, `turkish_vocab`, `lesson`, `story`, `word` и старое поле `content_blocks`.
-Экспорт словаря выгружает `{ "meta": { "language": "..." }, "vocab": [...] }`.
+## Темы и мобильная версия
 
-## Схема урока: динамические блоки
-
-Урок не привязан к фиксированному набору блоков. Используется массив `blocks`; блоки можно повторять и располагать в любом порядке, а навигация строится по массиву.
-
-```json
-{
-  "id": 1,
-  "title": "Present Perfect vs Past Simple",
-  "blocks": [
-    { "type": "theory", "nav_label": "Модель", "title": "Модель", "content": "..." },
-    { "type": "dialogue", "nav_label": "Диалог 1", "title": "Ten Years Later", "messages": [] },
-    { "type": "dialogue", "nav_label": "Диалог 2", "title": "The Morning After", "messages": [] },
-    { "type": "quiz", "nav_label": "Тест", "questions": [] }
-  ]
-}
-```
-
-Поддерживаемые типы: `theory`, `reading_heavy`, `dialogue`, `quiz`, `practice_write`. Неизвестный тип безопасно рендерится заглушкой. Старое поле `content_blocks` принимается при импорте, но канонический формат — `blocks`.
-
-## Темы оформления
-
-В настройках доступны 4 пресета:
-
-- 🌌 **Dark Glass** — исходный тёмный стеклянный UI.
+- 🌌 **Dark Glass** — по умолчанию.
 - 👾 **Cyberpunk Neon** — fuchsia / violet.
 - 🟩 **Hacker Mono** — чёрно-зелёная консоль, monospace.
-- ⚪ **Nordic Minimal** — приглушённый slate для чтения.
+- ⚪ **Nordic Minimal** — приглушённый slate.
 
-Тема применяется мгновенно, сохраняется в `lingua_ui_settings` и восстанавливается до первого кадра. Цвета построены на CSS-переменных (`--accent-rgb`, `--cyan-bright`, `--emerald-bright`, `--bg`, `--surface` и т.д.).
-
-## Мобильная версия
-
-- 320–430 px: без горизонтального overflow.
-- Кнопки ответов, вкладок и списков — минимум 44 px по высоте.
-- Sidebar урока на мобильном превращается в sticky-плашку **LESSON MAP** с выпадающим содержанием.
-- Перевод слова в историях открывается как **bottom sheet**, а выбранное слово прокручивается выше панели.
-- Импорт на мобильном имеет закреплённые кнопки действий.
-
-## Google Auth — опционально
-
-Google-вход больше не является зависимостью. Скрипт GIS **не загружается при старте**; он подключается только при открытии профиля и только если задан Client ID.
-
-1. Создай **OAuth 2.0 Client ID → Web application**.
-2. Добавь **Authorized JavaScript origins**:
-   - `https://<username>.github.io`
-   - `http://localhost:8765`
-3. Укажи Client ID:
-
-```html
-<meta name="google-client-id" content="1234567890-xxxx.apps.googleusercontent.com" />
-```
-
-После этого при открытии профиля вызывается `google.accounts.id.renderButton(...)`. JWT-credential декодируется, `name`, `email`, `picture` и `sub` сохраняются в `lingua_profile`. Без Client ID приложение работает полностью локально и показывает disabled-fallback, а не имитацию входа.
+Темы на CSS-переменных, сохраняются в `lingua_ui_settings`. На мобильных: tap-targets от 44 px, sticky **LESSON MAP**, bottom-sheet перевода и закреплённые кнопки импорта.
 
 ## localStorage
-
-Данные изолированы по языку:
 
 - `lingua_en_quiz_...`, `lingua_tr_writing_...`, `lingua_en_discovered_...`
 - `lingua_en_vocab`, `lingua_tr_vocab`, `lingua_da_vocab`
 - `lingua_en_imported_lessons`, `lingua_da_imported_stories`
 - `lingua_en_story_read_...`
-
-Глобальные ключи:
-
-- `lingua_ui_settings` — шрифт, язык и тема
+- `lingua_ui_settings` — шрифт, язык, тема
 - `lingua_profile` — Google-профиль
+- `lingua_cloud_last_sync` — время последней облачной записи
 
-Сброс прогресса удаляет только progress-ключи, сохраняя импортированный контент, словари, настройки и профиль.
+Сброс прогресса сохраняет импортированный контент, словари, настройки и профиль.
 
 ## Проверено
 
-- GitHub Pages-стиль подпапки и `file://` fallback.
-- Динамическая навигация: 7 блоков, два диалога подряд.
-- Переключение EN → TR → DA без смешивания данных.
-- Импорт `vocab` / `lessons` / `stories`, одиночных объектов и шаблонов.
-- Копирование шаблона в буфер обмена.
-- 4 темы и сохранение после reload.
-- Мобильный TOC, bottom sheet и tap-targets.
-- Google credential-flow только как опция.
-- 1440 / 768 / 430 / 390 / 320 px без горизонтального overflow.
+- GIS: официальные кнопки в шапке и профиле.
+- Supabase mock: `user_data`, `user_email`, upsert колонки `data`, pull/merge, debounce-autosave и статусы.
+- Офлайн-режим при заблокированных CDN.
+- Импорт `vocab` / `lessons` / `stories` и одиночных объектов.
+- 4 темы, мобильный TOC и bottom sheet.
+- 1440 / 1301 / 1300 / 1180 / 768 / 430 / 390 / 320 px без переполнений.
