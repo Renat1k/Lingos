@@ -3,7 +3,8 @@
 
     let currentSyncState = "local";
     let supabaseClient = null;
-    let cloudEmail = null;
+    let supabaseClientPromise = null;
+    let cloudUserId = null;
     let cloudTimer = null;
     let cloudPushInFlight = false;
     let cloudPushQueued = false;
@@ -15,11 +16,65 @@
       return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
     }
 
+    function isCloudSchemaMissing(error) {
+      const text = `${error?.code || ""} ${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+      const userColumn = text.includes("user_id") && (
+        text.includes("column") ||
+        text.includes("schema") ||
+        text.includes("does not exist") ||
+        text.includes("pgrst204") ||
+        text.includes("42703")
+      );
+      const conflictTarget = text.includes("42p10") || text.includes("no unique or exclusion constraint");
+      const policy = text.includes("row-level security") || text.includes("permission denied") || text.includes("42501");
+      return userColumn || conflictTarget || policy;
+    }
+
+    function waitForSupabaseSdk() {
+      if (window.supabase?.createClient) return Promise.resolve();
+      if (document.readyState === "complete") return Promise.reject(new Error("Supabase SDK is unavailable."));
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          if (window.supabase?.createClient) resolve();
+          else reject(new Error("Supabase SDK is unavailable."));
+        };
+        window.addEventListener("load", finish, { once: true });
+        window.setTimeout(finish, 12000);
+      });
+    }
+
+    async function ensureSupabaseClient() {
+      if (supabaseClient) return supabaseClient;
+      if (!cloudConfigReady()) throw new Error("Cloud config is missing.");
+      if (supabaseClientPromise) return supabaseClientPromise;
+      supabaseClientPromise = (async () => {
+        await waitForSupabaseSdk();
+        if (!window.supabase?.createClient) throw new Error("Supabase SDK is unavailable.");
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+          }
+        });
+        return supabaseClient;
+      })();
+      try {
+        return await supabaseClientPromise;
+      } finally {
+        supabaseClientPromise = null;
+      }
+    }
+
     function setSyncStatus(nextState, detail) {
       const states = {
         local: { emoji: "⚪", label: t("sync_local") },
         saving: { emoji: "🟡", label: t("sync_saving") },
-        synced: { emoji: "🟢", label: t("sync_synced") }
+        synced: { emoji: "🟢", label: t("sync_synced") },
+        blocked: { emoji: "🟠", label: t("cloud_not_ready") }
       };
       const stateConfig = states[nextState] || states.local;
       currentSyncState = nextState in states ? nextState : "local";
@@ -36,8 +91,12 @@
           ? t("cloud_synced")
           : currentSyncState === "saving"
             ? t("sync_saving")
-            : t("local_only");
+            : currentSyncState === "blocked"
+              ? t("cloud_not_ready")
+              : t("local_only");
       }
+      const profileNote = document.getElementById("profileSyncNote");
+      if (profileNote) profileNote.textContent = t(currentSyncState === "blocked" ? "cloud_not_ready_hint" : "profile_sync_hint");
     }
 
     function collectCloudPayload() {
@@ -116,6 +175,38 @@
       return [...map.values()];
     }
 
+    function isProgressKey(key) {
+      return /_(quiz_lesson_|writing_lesson_|story_read_|discovered_lesson_)/.test(key);
+    }
+
+    function progressTimestamp(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+      return Math.max(
+        timestampValue(value.updated_at),
+        timestampValue(value.updatedAt),
+        timestampValue(value.savedAt),
+        timestampValue(value.readAt)
+      );
+    }
+
+    function mergeProgressValue(localValue, remoteValue) {
+      if (Array.isArray(localValue) || Array.isArray(remoteValue)) {
+        return [...new Set([...(Array.isArray(localValue) ? localValue : []), ...(Array.isArray(remoteValue) ? remoteValue : [])])];
+      }
+      if (localValue == null) return remoteValue;
+      if (remoteValue == null) return localValue;
+      if (typeof localValue === "object" && typeof remoteValue === "object") {
+        return progressTimestamp(remoteValue) > progressTimestamp(localValue) ? remoteValue : localValue;
+      }
+      return remoteValue;
+    }
+
+    function mergeSettingsValue(localValue, remoteValue) {
+      if (!localValue || typeof localValue !== "object") return remoteValue;
+      if (!remoteValue || typeof remoteValue !== "object") return localValue;
+      return timestampValue(remoteValue.updated_at) > timestampValue(localValue.updated_at) ? remoteValue : localValue;
+    }
+
     function applyCloudPayload(payload) {
       if (!payload || typeof payload !== "object" || !payload.values || typeof payload.values !== "object") return false;
       cloudApplying = true;
@@ -134,7 +225,11 @@
           if (key === DELETED_KEY) return;
           if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE) return;
           let nextValue = value;
-          if (/_(vocab|imported_lessons|imported_stories)$/.test(key) || key === CUSTOM_LANGUAGES_KEY) {
+          if (key === UI_SETTINGS_KEY) {
+            nextValue = mergeSettingsValue(readJSON(key, null), value);
+          } else if (isProgressKey(key)) {
+            nextValue = mergeProgressValue(readJSON(key, null), value);
+          } else if (/_(vocab|imported_lessons|imported_stories)$/.test(key) || key === CUSTOM_LANGUAGES_KEY) {
             nextValue = mergeCloudCollection(key, readJSON(key, []), value);
           }
           try {
@@ -175,10 +270,6 @@
       else window.location.hash = "#dashboard";
     }
 
-    function normalizeCloudEmail(value) {
-      return String(value || "").trim().toLowerCase();
-    }
-
     function extractCloudPayload(row) {
       if (!row || typeof row !== "object") return null;
       const keys = ["payload", "data", "state", "content", "sync_data", "user_data"];
@@ -201,19 +292,25 @@
       return null;
     }
 
-    async function pushCloudData() {
-      if (!cloudConfigReady() || !supabaseClient || !cloudEmail || !navigator.onLine) {
+    async function pushCloudData(options = {}) {
+      const skipPull = Boolean(options.skipPull);
+      if (!cloudConfigReady() || !cloudUserId || !navigator.onLine) {
         setSyncStatus("local");
-        return;
+        return false;
       }
       if (cloudPushInFlight) {
         cloudPushQueued = true;
-        return;
+        return false;
+      }
+      if (!skipPull) {
+        const pulled = await pullCloudData(false);
+        if (!pulled) return false;
       }
       cloudPushInFlight = true;
       cloudPushQueued = false;
       setSyncStatus("saving");
       try {
+        const client = supabaseClient || await ensureSupabaseClient();
         const payload = collectCloudPayload();
         const columns = cloudDataColumn
           ? [cloudDataColumn, ...CLOUD_DATA_COLUMNS.filter((column) => column !== cloudDataColumn)]
@@ -221,9 +318,11 @@
         let lastError = null;
         let saved = false;
         for (const column of columns) {
-          const { error } = await supabaseClient
+          const row = { user_id: cloudUserId, [column]: payload };
+          if (state.authUser?.email) row.user_email = state.authUser.email;
+          const { error } = await client
             .from(CLOUD_TABLE)
-            .upsert({ user_email: cloudEmail, [column]: payload }, { onConflict: "user_email" });
+            .upsert(row, { onConflict: "user_id" });
           if (!error) {
             cloudDataColumn = column;
             saved = true;
@@ -236,9 +335,12 @@
           window.localStorage.setItem(CLOUD_META_KEY, new Date().toISOString());
         } catch (error) { /* storage can be unavailable */ }
         setSyncStatus("synced");
+        return true;
       } catch (error) {
         console.warn("Cloud sync save failed.", error);
-        setSyncStatus("local");
+        if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
+        else setSyncStatus("local");
+        return false;
       } finally {
         cloudPushInFlight = false;
         if (cloudPushQueued) {
@@ -250,7 +352,7 @@
 
     function scheduleCloudSync() {
       if (cloudApplying) return;
-      if (!cloudConfigReady() || !supabaseClient || !cloudEmail) {
+      if (!cloudConfigReady() || !cloudUserId) {
         setSyncStatus("local");
         return;
       }
@@ -262,46 +364,51 @@
       window.clearTimeout(cloudTimer);
       cloudTimer = window.setTimeout(() => {
         cloudTimer = null;
-        pushCloudData();
+        void pushCloudData();
       }, 850);
     }
 
-    async function pullCloudData() {
-      if (!cloudConfigReady() || !supabaseClient || !cloudEmail) {
+    async function pullCloudData(pushAfter = true) {
+      if (!cloudConfigReady() || !cloudUserId) {
         setSyncStatus("local");
-        return;
+        return false;
       }
       setSyncStatus("saving");
       try {
-        const { data, error } = await supabaseClient
+        const client = supabaseClient || await ensureSupabaseClient();
+        const { data, error } = await client
           .from(CLOUD_TABLE)
           .select("*")
-          .eq("user_email", cloudEmail)
+          .eq("user_id", cloudUserId)
           .maybeSingle();
         if (error) throw error;
         const payload = extractCloudPayload(data);
         const applied = payload ? applyCloudPayload(payload) : false;
         if (applied) refreshAfterCloudApply();
-        await pushCloudData();
+        if (pushAfter) await pushCloudData({ skipPull: true });
+        return true;
       } catch (error) {
         console.warn("Cloud sync load failed.", error);
-        setSyncStatus("local");
+        if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
+        else setSyncStatus("local");
+        return false;
       }
     }
 
-    function startCloudSyncForProfile() {
-      const email = normalizeCloudEmail(state.profile?.email);
-      cloudEmail = email || null;
-      if (!cloudEmail || !cloudConfigReady()) {
+    async function startCloudSyncForProfile() {
+      cloudUserId = state.authUser?.id ? String(state.authUser.id) : null;
+      if (!cloudUserId || !cloudConfigReady()) {
         setSyncStatus("local");
         return;
       }
-      if (!supabaseClient) {
-        initCloudSyncWhenReady();
-        return;
+      try {
+        await ensureSupabaseClient();
+        setSyncStatus("saving");
+        await pullCloudData();
+      } catch (error) {
+        console.warn("Cloud sync start failed.", error);
+        setSyncStatus("local");
       }
-      setSyncStatus("saving");
-      void pullCloudData();
     }
 
     async function initCloudSync() {
@@ -311,25 +418,18 @@
         setSyncStatus("local");
         return;
       }
-      if (!window.supabase?.createClient) {
-        console.warn("Supabase SDK is unavailable; using local mode.");
-        setSyncStatus("local");
-        return;
-      }
       try {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false
-          }
-        });
-        const email = normalizeCloudEmail(state.profile?.email);
-        if (email) {
-          cloudEmail = email;
+        const client = await ensureSupabaseClient();
+        const { data, error } = await client.auth.getSession();
+        if (error) throw error;
+        const session = data?.session || null;
+        if (session?.user) {
+          if (typeof hydrateAuthSession === "function") hydrateAuthSession(session);
+          cloudUserId = String(session.user.id);
           setSyncStatus("saving");
           await pullCloudData();
         } else {
+          cloudUserId = null;
           setSyncStatus("local");
         }
       } catch (error) {

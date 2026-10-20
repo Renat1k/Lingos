@@ -35,57 +35,39 @@ GIS загружается по требованию, официальная к�
 
 ## Cloud Sync: Supabase
 
-Проект уже указан в `index.html`:
+Проект уже указан в `index.html`, а Supabase SDK подключён через CDN. Схема БД и RLS обновляются вручную файлом [`sql/migration.sql`](sql/migration.sql).
 
-```html
-<meta name="supabase-url" content="https://zwrptehythksuekxxdih.supabase.co" />
-<meta name="supabase-anon-key" content="sb_publishable_ttebq8FX0aTMnyddhtp3kQ_izHfEB8W" />
-```
+### Supabase Auth
 
-SDK подключён через CDN:
+Включи в Supabase Dashboard:
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-```
+1. **Authentication → Providers → Email**: включён. Email confirmation можно оставить выключенным; при включённом приложение покажет «подтвердите почту».
+2. **Authentication → Providers → Google**: включён, Client ID и Client Secret из Google Cloud.
+3. В Google Cloud → OAuth Client → **Authorized JavaScript origins** добавь `http://localhost:8000`, `http://127.0.0.1:8765` и GitHub Pages origin.
+4. Если в Supabase включена nonce-проверка Google, настрой её отдельно: текущий GIS-вход передаёт ID token без отдельного nonce и рассчитан на провайдер без nonce-проверки.
 
-Синхронизация работает по Google email, без Supabase Auth. Нужна таблица `public.user_data` с ключом `user_email`:
+### Миграция user_id
 
-```sql
-create table if not exists public.user_data (
-  user_email text primary key,
-  data jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
+Выполни [`sql/migration.sql`](sql/migration.sql) в Supabase SQL Editor после бэкапа. Она:
 
-alter table public.user_data enable row level security;
+- добавляет `user_id uuid` и уникальный индекс;
+- включает RLS и создаёт политики `auth.uid() = user_id`;
+- сохраняет старые строки;
+- содержит отдельный проверочный запрос и backfill только для подтверждённого e-mail.
 
-create policy "lingua_user_data_access"
-on public.user_data
-for all
-to anon
-using (true)
-with check (true);
-```
+Перед backfill просмотри `pg_policies`: старые permissive-политики нужно удалить, иначе они останутся разрешающими.
 
-Если таблица создана с колонкой `payload`, `state`, `content`, `sync_data` или `user_data` вместо `data`, клиент автоматически определит её при чтении/записи.
-
-Важно:
-
-- клиент использует `upsert` по `user_email`;
-- таблица должна быть доступна роли `anon` (publishable key);
-- схема с доступом по одному email не заменяет серверную авторизацию — это персональный/демо-режим;
-- при отсутствии таблицы, сети или ключей приложение остаётся в локальном режиме.
+До миграции приложение работает локально и показывает статус **«Облако не готово»**; оно не пишет данные по непроверенному email.
 
 ## Синхронизация
 
-Если профиль Google есть в `lingua_profile`:
-
-- при загрузке выполняется попытка чтения строки `user_data` по email;
-- локальные и облачные данные сливаются: словари и импортированные уроки/истории объединяются, остальные ключи обновляются из облака;
-- после слияния выполняется обратная запись;
-- любые изменения (`writeJSON` / `removeStored`) запускают debounce-сохранение через 850 мс;
-- Top Bar показывает `⚪ Локальный режим`, `🟡 Сохранение...` или `🟢 Синхронизировано`;
-- офлайн-изменения сохраняются в `localStorage`, а при возврате сети отправляются в Supabase.
+- Строка `user_data` принадлежит `auth.uid()`; `user_email` — только описательное поле.
+- При входе и перед каждым push выполняется pull + merge.
+- Слова, курсы и tombstones сливаются по `updated_at`/`deleted_at`; настройки — по `updated_at`; прогресс — по `updatedAt`/`savedAt`/`readAt`, массивы discovered объединяются.
+- Любые изменения запускают debounce-сохранение через 850 мс.
+- Top Bar показывает `⚪ Локальный режим`, `🟡 Сохранение...`, `🟢 Синхронизировано` или `🟠 Облако не готово`.
+- Офлайн-изменения остаются в `localStorage` и отправляются при возврате сети.
+- Пароль и Gemini key никогда не попадают в payload: пароль хранится только в Supabase Auth, Gemini key — только в браузере.
 
 ## Импорт
 

@@ -1066,7 +1066,7 @@
       setSyncStatus("local", "Офлайн · локальный режим");
     });
     window.addEventListener("online", () => {
-      if (cloudEmail && supabaseClient) {
+      if (cloudUserId && supabaseClient) {
         setSyncStatus("saving");
         void pushCloudData();
       } else {

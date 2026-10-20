@@ -11,7 +11,7 @@
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <link rel="stylesheet" href="css/style.css?v=2.5" />
+  <link rel="stylesheet" href="css/style.css?v=2.6" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -180,6 +180,16 @@
       </header>
 
       <div class="settings-body">
+        <section class="settings-section" aria-labelledby="accountSettingLabel">
+          <div class="settings-section-head">
+            <span id="accountSettingLabel" data-i18n="profile_account">Профиль</span>
+            <span class="profile-warning" id="profilePasswordWarning" hidden aria-label="Пароль не задан" title="Пароль не задан">!</span>
+          </div>
+          <p class="settings-help" id="profilePasswordWarningText" data-i18n="profile_password_not_set_hint" hidden>Задай пароль, чтобы входить по e-mail.</p>
+          <p class="settings-help" data-i18n="profile_settings_hint">Никнейм и аватар хранятся в user_metadata Supabase.</p>
+          <button class="btn btn-quiet" type="button" data-open-profile data-i18n="open_profile">Открыть профиль</button>
+        </section>
+
         <section class="settings-section" aria-labelledby="fontSettingLabel">
           <div class="settings-section-head">
             <span id="fontSettingLabel" data-i18n="text_size">Размер текста</span>
@@ -417,32 +427,92 @@
         </button>
       </header>
       <div class="profile-body">
-        <div class="profile-hero">
-          <div class="profile-avatar-large" id="profileAvatarLarge">?</div>
-          <div class="profile-identity">
-            <span class="profile-provider" id="profileProvider">LOCAL PROFILE</span>
-            <h3 id="profileName">Гость</h3>
-            <p id="profileEmail">Вход необязателен: уроки, прогресс и словарь уже работают локально без аккаунта.</p>
+        <div class="auth-signed-out" id="authSignedOut">
+          <div class="auth-tabs" role="tablist" aria-label="Account" data-i18n-aria="profile_account">
+            <button class="auth-tab is-active" id="authTabLogin" type="button" role="tab" aria-selected="true" data-i18n="auth_sign_in_tab">Войти</button>
+            <button class="auth-tab" id="authTabSignup" type="button" role="tab" aria-selected="false" data-i18n="auth_sign_up_tab">Создать аккаунт</button>
           </div>
+          <p class="auth-local-note" data-i18n="auth_local_note">Можно учиться без аккаунта. Вход нужен только для синхронизации.</p>
+          <form class="auth-form" id="authForm" novalidate>
+            <label class="profile-field">
+              <span data-i18n="auth_email">E-mail</span>
+              <input id="authEmail" type="email" inputmode="email" autocomplete="email" required data-i18n-placeholder="auth_email" placeholder="E-mail" />
+            </label>
+            <label class="profile-field">
+              <span data-i18n="auth_password">Пароль</span>
+              <input id="authPassword" type="password" autocomplete="current-password" required minlength="6" data-i18n-placeholder="auth_password" placeholder="Пароль" />
+            </label>
+            <p class="auth-status" id="authStatus" aria-live="polite"></p>
+            <button class="btn btn-primary auth-submit" id="authSubmit" type="submit" data-i18n="auth_sign_in">Войти</button>
+          </form>
+          <div class="auth-divider"><span data-i18n="auth_or">или</span></div>
+          <div class="google-auth-host" id="google-btn-container"></div>
+          <p class="google-auth-note" id="googleAuthNote"></p>
         </div>
-        <div class="profile-grid">
-          <div class="profile-info">
-            <span data-i18n="learning_language">Язык обучения</span>
-            <strong id="profileLanguage">English</strong>
+
+        <div class="auth-signed-in" id="authSignedIn" hidden>
+          <div class="profile-hero">
+            <div class="profile-avatar-large" id="profileAvatarLarge">?</div>
+            <div class="profile-identity">
+              <span class="profile-provider" id="profileProvider">LOCAL PROFILE</span>
+              <h3 id="profileName">Гость</h3>
+              <p id="profileEmail">Вход необязателен: уроки, прогресс и словарь уже работают локально без аккаунта.</p>
+            </div>
           </div>
-          <div class="profile-info">
-            <span data-i18n="sync">Синхронизация</span>
-            <strong id="profileSyncStatus">Local only</strong>
+          <div class="profile-grid">
+            <div class="profile-info">
+              <span data-i18n="learning_language">Язык обучения</span>
+              <strong id="profileLanguage">English</strong>
+            </div>
+            <div class="profile-info">
+              <span data-i18n="sync">Синхронизация</span>
+              <strong id="profileSyncStatus">Local only</strong>
+            </div>
           </div>
+          <div class="profile-sync-note">
+            <span class="signal" aria-hidden="true"></span>
+            <p id="profileSyncNote" data-i18n="cloud_not_ready_hint">Выполни SQL-миграцию, чтобы включить синхронизацию по user_id. Данные пока локальны.</p>
+          </div>
+
+          <form class="profile-form" id="profileForm" novalidate>
+            <label class="profile-field">
+              <span data-i18n="profile_nickname">Никнейм</span>
+              <input id="profileNickname" type="text" maxlength="48" autocomplete="nickname" data-i18n-placeholder="profile_nickname" placeholder="Никнейм" />
+            </label>
+            <label class="profile-field">
+              <span data-i18n="profile_avatar_url">URL аватара</span>
+              <input id="profileAvatarUrl" type="url" maxlength="500" autocomplete="photo" data-i18n-placeholder="profile_avatar_url" placeholder="https://…" />
+            </label>
+            <div class="avatar-presets-wrap">
+              <span class="profile-field-label" data-i18n="profile_avatar_presets">Быстрый аватар</span>
+              <div class="avatar-presets" id="avatarPresets" role="group" aria-label="Avatar presets" data-i18n-aria="profile_avatar_presets">
+                <button class="avatar-preset" type="button" data-avatar-emoji="" aria-label="Initials">Aa</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="🦊" aria-label="Fox">🦊</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="🐼" aria-label="Panda">🐼</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="🚀" aria-label="Rocket">🚀</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="🌊" aria-label="Wave">🌊</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="⚡" aria-label="Bolt">⚡</button>
+                <button class="avatar-preset" type="button" data-avatar-emoji="🌙" aria-label="Moon">🌙</button>
+              </div>
+            </div>
+            <div class="profile-avatar-preview" id="profileAvatarPreview" aria-hidden="true">?</div>
+            <p class="auth-status" id="profileStatus" aria-live="polite"></p>
+            <button class="btn btn-primary" id="profileSave" type="submit" data-i18n="profile_save">Сохранить профиль</button>
+          </form>
+
+          <form class="password-form" id="passwordForm" novalidate>
+            <label class="profile-field">
+              <span id="profilePasswordLabel" data-i18n="profile_password">Пароль</span>
+              <input id="profilePassword" type="password" autocomplete="new-password" minlength="6" data-i18n-placeholder="auth_password" placeholder="Пароль" />
+            </label>
+            <p class="settings-help" id="profilePasswordHint" data-i18n="profile_password_not_set_hint">Задай пароль, чтобы входить по e-mail.</p>
+            <p class="auth-status" id="profilePasswordStatus" aria-live="polite"></p>
+            <button class="btn btn-quiet" id="profilePasswordSave" type="button" data-i18n="profile_password_set">Задать пароль</button>
+          </form>
+
+          <button class="btn btn-quiet profile-signout" id="profileSignOut" type="button" data-i18n="sign_out" hidden>Выйти из профиля</button>
+          <p class="profile-disclaimer" data-i18n="profile_disclaimer">Пароль хранится только в Supabase Auth. Ключ Gemini остаётся локальным.</p>
         </div>
-        <div class="profile-sync-note">
-          <span class="signal" aria-hidden="true"></span>
-          <p data-i18n="google_note">Google-вход опционален. Он сохраняет имя и фото для будущей синхронизации, но не требуется для учёбы.</p>
-        </div>
-        <div class="google-auth-host" id="google-btn-container"></div>
-        <p class="google-auth-note" id="googleAuthNote"></p>
-        <button class="btn btn-quiet profile-signout" id="profileSignOut" type="button" data-i18n="sign_out" hidden>Выйти из профиля</button>
-        <p class="profile-disclaimer">Google Auth активирован · OAuth Client ID настроен. Вход опционален, локальный режим работает без аккаунта.</p>
       </div>
     </div>
   </dialog>
@@ -527,19 +597,19 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.5"></script>
-  <script src="js/data-default.js?v=2.5"></script>
-  <script src="js/state.js?v=2.5"></script>
-  <script src="js/dom.js?v=2.5"></script>
-  <script src="js/helpers.js?v=2.5"></script>
-  <script src="js/sync.js?v=2.5"></script>
-  <script src="js/auth.js?v=2.5"></script>
-  <script src="js/ai-studio.js?v=2.5"></script>
-  <script src="js/ui-settings.js?v=2.5"></script>
-  <script src="js/vocab.js?v=2.5"></script>
-  <script src="js/stories.js?v=2.5"></script>
-  <script src="js/lessons.js?v=2.5"></script>
-  <script src="js/import.js?v=2.5"></script>
-  <script src="js/app.js?v=2.5"></script>
+  <script src="js/config.js?v=2.6"></script>
+  <script src="js/data-default.js?v=2.6"></script>
+  <script src="js/state.js?v=2.6"></script>
+  <script src="js/dom.js?v=2.6"></script>
+  <script src="js/helpers.js?v=2.6"></script>
+  <script src="js/sync.js?v=2.6"></script>
+  <script src="js/auth.js?v=2.6"></script>
+  <script src="js/ai-studio.js?v=2.6"></script>
+  <script src="js/ui-settings.js?v=2.6"></script>
+  <script src="js/vocab.js?v=2.6"></script>
+  <script src="js/stories.js?v=2.6"></script>
+  <script src="js/lessons.js?v=2.6"></script>
+  <script src="js/import.js?v=2.6"></script>
+  <script src="js/app.js?v=2.6"></script>
 </body>
 </html>

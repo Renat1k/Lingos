@@ -17,6 +17,10 @@
       story: null,
       storyId: null,
       profile: null,
+      authUser: null,
+      authMode: "login",
+      authBusy: false,
+      avatarEmojiDraft: "",
       view: "dashboard",
       backTarget: "#dashboard",
       source: "fetch",
@@ -24,7 +28,7 @@
       activeBlock: 0,
       toastTimer: null,
       scrollCleanup: null,
-      settings: { font: "normal", language: "en", theme: "glass", uiLanguage: "ru" },
+      settings: { font: "normal", language: "en", theme: "glass", uiLanguage: "ru", updated_at: "" },
       geminiKey: "",
       languageFilter: "active",
       courseFlagDraft: null,
@@ -174,7 +178,8 @@
         font: stored && stored.font === "large" ? "large" : "normal",
         language: stored && active.includes(stored.language) ? stored.language : (active[0] || "en"),
         theme: stored && THEME_IDS.includes(stored.theme) ? stored.theme : "glass",
-        uiLanguage: stored && UI_LANGUAGES[stored.uiLanguage] ? stored.uiLanguage : "ru"
+        uiLanguage: stored && UI_LANGUAGES[stored.uiLanguage] ? stored.uiLanguage : "ru",
+        updated_at: String(stored?.updated_at || "")
       };
       try {
         state.geminiKey = window.localStorage.getItem(GEMINI_KEY_STORAGE) || "";
@@ -184,6 +189,7 @@
     }
 
     function persistSettings() {
+      state.settings.updated_at = new Date().toISOString();
       writeJSON(UI_SETTINGS_KEY, state.settings);
     }
 
