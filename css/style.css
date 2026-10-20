@@ -5677,6 +5677,40 @@
     .course-flag-hint { margin: 0; color: var(--dim); font-size: 0.62rem; }
 
     .vocab-item-actions { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+    .vocab-speak {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.12);
+      color: var(--dim);
+      cursor: pointer;
+      transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+    .vocab-speak:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.32); background: rgba(var(--accent-rgb), 0.06); }
+    .vocab-speak:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.6); outline-offset: 2px; }
+    .vocab-speak .icon { width: 17px; height: 17px; }
+    .vocab-speak-idle, .vocab-speak-playing { display: grid; place-items: center; }
+    .vocab-speak-playing { display: none; }
+    .vocab-speak.is-playing { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.45); background: rgba(var(--accent-rgb), 0.1); animation: vocab-speak-pulse 1.05s ease-in-out infinite; }
+    .vocab-speak.is-playing .vocab-speak-idle { display: none; }
+    .vocab-speak.is-playing .vocab-speak-playing { display: grid; }
+    .vocab-speak.is-unavailable { opacity: 0.5; color: var(--muted); }
+    .vocab-speak.is-unavailable:hover { opacity: 0.75; color: var(--dim); border-color: var(--line); background: rgba(0, 0, 0, 0.12); }
+    @keyframes vocab-speak-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+      50% { box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .vocab-speak.is-playing { animation: none; }
+    }
+    @media (max-width: 700px) {
+      .vocab-speak { width: 44px; height: 44px; }
+    }
     .vocab-delete {
       width: 40px;
       height: 40px;

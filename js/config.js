@@ -75,6 +75,21 @@
       { code: "EE", lang: "et" }, { code: "MD", lang: "ro" }, { code: "AL", lang: "sq" },
       { code: "MK", lang: "mk" }, { code: "BA", lang: "bs" }, { code: "ME", lang: "sr" }
     ];
+    const SPEECH_LANGUAGE_BCP47 = {
+      en: "en-US", tr: "tr-TR", da: "da-DK", es: "es-ES", fr: "fr-FR", de: "de-DE",
+      it: "it-IT", pt: "pt-PT", nl: "nl-NL", ja: "ja-JP", ko: "ko-KR", zh: "zh-CN",
+      ar: "ar-SA", pl: "pl-PL", sv: "sv-SE", no: "nb-NO", fi: "fi-FI", is: "is-IS",
+      ru: "ru-RU", uk: "uk-UA", be: "be-BY", kk: "kk-KZ", ka: "ka-GE", hy: "hy-AM",
+      az: "az-AZ", fa: "fa-IR", he: "he-IL", hi: "hi-IN", ur: "ur-PK", bn: "bn-BD",
+      si: "si-LK", ne: "ne-NP", th: "th-TH", vi: "vi-VN", id: "id-ID", ms: "ms-MY",
+      tl: "fil-PH", sw: "sw-KE", ro: "ro-RO", bg: "bg-BG", el: "el-GR", hr: "hr-HR",
+      sr: "sr-RS", sl: "sl-SI", sk: "sk-SK", cs: "cs-CZ", hu: "hu-HU", lt: "lt-LT",
+      lv: "lv-LV", et: "et-EE", sq: "sq-AL", mk: "mk-MK", bs: "bs-BA"
+    };
+    const SPEECH_LANGUAGE_ALIASES = { no: ["nb", "no"], tl: ["fil", "tl"] };
+    const SPEECH_COUNTRY_LANGUAGES = Object.fromEntries(
+      FLAG_OPTIONS.map((option) => [option.code, option.lang])
+    );
     const THEMES = {
       glass: { label: "Dark Glass" },
       cyber: { label: "Cyberpunk Neon" },
@@ -1240,6 +1255,36 @@
       }
     };
     Object.entries(D5_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const D6_UI_TRANSLATIONS = {
+      ru: {
+        vocab_speak_word: "Прослушать слово «{word}»",
+        vocab_speak_stop: "Остановить озвучку «{word}»",
+        vocab_no_voice: "Для языка «{language}» на этом устройстве нет голоса.",
+        vocab_no_voice_hint: "Windows: Параметры → Время и язык → Речь; Android: Настройки → Синтез речи; iOS: Настройки → Универсальный доступ → Речь."
+      },
+      en: {
+        vocab_speak_word: "Listen to “{word}”",
+        vocab_speak_stop: "Stop pronunciation of “{word}”",
+        vocab_no_voice: "There is no voice for “{language}” on this device.",
+        vocab_no_voice_hint: "Windows: Settings → Time & language → Speech; Android: Settings → Text-to-speech; iOS: Settings → Accessibility → Spoken Content."
+      },
+      da: {
+        vocab_speak_word: "Lyt til “{word}”",
+        vocab_speak_stop: "Stop udtalen af “{word}”",
+        vocab_no_voice: "Der er ingen stemme til “{language}” på denne enhed.",
+        vocab_no_voice_hint: "Windows: Indstillinger → Tid og sprog → Tale; Android: Indstillinger → Tekst til tale; iOS: Indstillinger → Tilgængelighed → Talt indhold."
+      },
+      tr: {
+        vocab_speak_word: "“{word}” kelimesini dinle",
+        vocab_speak_stop: "“{word}” telaffuzunu durdur",
+        vocab_no_voice: "Bu cihazda “{language}” için ses yok.",
+        vocab_no_voice_hint: "Windows: Ayarlar → Saat ve dil → Konuşma; Android: Ayarlar → Metin okuma; iOS: Ayarlar → Erişilebilirlik → Konuşulan İçerik."
+      }
+    };
+    Object.entries(D6_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
       Object.assign(UI_TRANSLATIONS[language], dictionary);
     });
 
