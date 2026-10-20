@@ -11,7 +11,7 @@
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <link rel="stylesheet" href="css/style.css?v=2.8" />
+  <link rel="stylesheet" href="css/style.css?v=2.11" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -341,6 +341,25 @@
           <div class="gemini-actions">
             <button class="btn btn-quiet" id="geminiTest" type="button" data-i18n="check_key">Проверить ключ</button>
             <span class="gemini-status" id="geminiStatus" aria-live="polite"></span>
+          </div>
+
+          <div class="gemini-model-section">
+            <div class="gemini-model-head">
+              <span data-i18n="gemini_model_label">Модель Gemini</span>
+              <button class="gemini-model-refresh" id="geminiModelRefresh" type="button" data-i18n="gemini_model_refresh">Обновить список</button>
+            </div>
+            <div class="gemini-model-select">
+              <button class="gemini-model-trigger" id="geminiModelTrigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria="gemini_model_label" aria-label="Модель Gemini">
+                <span id="geminiModelCurrent">—</span>
+                <span class="gemini-model-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div class="gemini-model-menu" id="geminiModelMenu" role="listbox" hidden></div>
+            </div>
+            <p class="gemini-model-status" id="geminiModelStatus" aria-live="polite"></p>
+            <div class="gemini-fallback" id="geminiFallbackNotice" hidden>
+              <span id="geminiFallbackText"></span>
+              <button class="btn btn-quiet" id="geminiMakePrimary" type="button" data-i18n="gemini_make_primary">Сделать основной</button>
+            </div>
           </div>
         </section>
 
@@ -711,6 +730,9 @@
         </button>
       </header>
       <div class="ai-analysis-body" id="aiAnalysisBody" aria-live="polite"></div>
+      <div class="ai-analysis-actions">
+        <button class="btn btn-secondary" id="aiAnalysisRetry" type="button" data-i18n="gemini_retry" hidden>Повторить</button>
+      </div>
     </div>
   </dialog>
 
@@ -718,67 +740,24 @@
     <div class="ai-studio-panel">
       <header class="ai-studio-head">
         <div>
-          <span class="settings-kicker"><i aria-hidden="true"></i> <span data-i18n="ai_studio_kicker">AI STUDIO / GENERATOR</span></span>
+          <span class="settings-kicker"><i aria-hidden="true"></i> <span data-i18n="ai_chat_kicker">AI-МЕТОДИСТ / ЧАТ</span></span>
           <h2 id="aiStudioTitle" data-i18n="ai_studio_title">AI Studio</h2>
         </div>
-        <button class="icon-btn" id="aiStudioClose" type="button" data-i18n-aria="ai_close" aria-label="Закрыть">
-          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
-        </button>
+        <div class="ai-studio-head-actions">
+          <button class="btn btn-quiet ai-chat-new" id="aiChatNew" type="button" data-i18n="ai_chat_new">Новый чат</button>
+          <button class="icon-btn" id="aiStudioClose" type="button" data-i18n-aria="ai_close" aria-label="Закрыть">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+          </button>
+        </div>
       </header>
 
-      <div class="ai-studio-body">
-        <div class="ai-key-missing" id="aiStudioKeyMissing" hidden>
-          <strong data-i18n="ai_need_key">Сначала добавь Gemini API-ключ.</strong>
-          <p data-i18n="ai_key_hint">Ключ хранится только в этом браузере.</p>
-          <button class="btn btn-primary" id="aiStudioOpenKey" type="button" data-i18n="ai_open_key">Открыть настройки ключа</button>
-        </div>
-
-        <div id="aiStudioMain">
-          <div id="aiStudioForm">
-            <div class="ai-studio-intro">
-              <h3 data-i18n="ai_studio_diag_title">Микро-диагностика</h3>
-              <p data-i18n="ai_studio_diag_hint">Ответь на 4 вопроса — AI подстроит материал.</p>
-            </div>
-            <div class="ai-diagnostics" id="aiDiagnostics"></div>
-
-            <div class="ai-studio-fields">
-              <label class="ai-studio-field">
-                <span data-i18n="ai_studio_type">Что создать?</span>
-                <select id="aiContentType">
-                  <option value="lessons" data-i18n="ai_type_lessons">Урок</option>
-                  <option value="stories" data-i18n="ai_type_stories">История</option>
-                  <option value="vocab" data-i18n="ai_type_vocab">Словарь</option>
-                </select>
-              </label>
-              <label class="ai-studio-field">
-                <span data-i18n="ai_studio_topic">Тема</span>
-                <input id="aiTopic" type="text" maxlength="120" data-i18n-placeholder="ai_topic_placeholder" placeholder="Например: путешествия" />
-              </label>
-              <label class="ai-studio-field">
-                <span data-i18n="ai_studio_level">Уровень</span>
-                <select id="aiLevel">
-                  <option value="A1" data-i18n="ai_level_a1">A1</option>
-                  <option value="A2" data-i18n="ai_level_a2">A2</option>
-                  <option value="B1" selected data-i18n="ai_level_b1">B1</option>
-                  <option value="B2" data-i18n="ai_level_b2">B2</option>
-                </select>
-              </label>
-            </div>
-
-            <p class="ai-studio-status" id="aiStudioStatus" aria-live="polite"></p>
-            <button class="btn btn-primary ai-studio-generate" id="aiStudioGenerate" type="button" data-i18n="ai_generate">Сгенерировать</button>
-          </div>
-
-          <div class="ai-studio-preview" id="aiStudioPreview" hidden>
-            <div class="ai-studio-intro">
-              <h3 data-i18n="ai_preview_title">Предпросмотр JSON</h3>
-              <p data-i18n="ai_preview_hint">Проверь материал перед добавлением в курс.</p>
-            </div>
-            <pre class="ai-preview-json" id="aiPreviewJson"></pre>
-            <div class="ai-studio-actions">
-              <button class="btn btn-quiet" id="aiPreviewBack" type="button" data-i18n="ai_back">Назад</button>
-              <button class="btn btn-primary" id="aiImportPreview" type="button" data-i18n="ai_import">Добавить в курс</button>
-            </div>
+      <div class="ai-chat-shell">
+        <div class="ai-chat-log" id="aiChatLog" aria-live="polite"></div>
+        <div class="ai-chat-composer">
+          <div class="ai-chat-hint" id="aiChatHint" data-i18n="ai_chat_hint">Enter — отправить · Shift+Enter — новая строка</div>
+          <div class="ai-chat-composer-row">
+            <textarea id="aiChatInput" rows="1" data-i18n-placeholder="ai_chat_placeholder" aria-label="Напиши запрос…" data-i18n-aria="ai_chat_placeholder" placeholder="Напиши запрос…"></textarea>
+            <button class="btn btn-primary ai-chat-send" id="aiChatSend" type="button" data-i18n="ai_chat_send">Отправить</button>
           </div>
         </div>
       </div>
@@ -787,19 +766,19 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.8"></script>
-  <script src="js/data-default.js?v=2.8"></script>
-  <script src="js/state.js?v=2.8"></script>
-  <script src="js/dom.js?v=2.8"></script>
-  <script src="js/helpers.js?v=2.8"></script>
-  <script src="js/sync.js?v=2.8"></script>
-  <script src="js/auth.js?v=2.8"></script>
-  <script src="js/ai-studio.js?v=2.8"></script>
-  <script src="js/ui-settings.js?v=2.8"></script>
-  <script src="js/vocab.js?v=2.8"></script>
-  <script src="js/stories.js?v=2.8"></script>
-  <script src="js/lessons.js?v=2.8"></script>
-  <script src="js/import.js?v=2.8"></script>
-  <script src="js/app.js?v=2.8"></script>
+  <script src="js/config.js?v=2.11"></script>
+  <script src="js/data-default.js?v=2.11"></script>
+  <script src="js/state.js?v=2.11"></script>
+  <script src="js/dom.js?v=2.11"></script>
+  <script src="js/helpers.js?v=2.11"></script>
+  <script src="js/sync.js?v=2.11"></script>
+  <script src="js/auth.js?v=2.11"></script>
+  <script src="js/ai-studio.js?v=2.11"></script>
+  <script src="js/ui-settings.js?v=2.11"></script>
+  <script src="js/vocab.js?v=2.11"></script>
+  <script src="js/stories.js?v=2.11"></script>
+  <script src="js/lessons.js?v=2.11"></script>
+  <script src="js/import.js?v=2.11"></script>
+  <script src="js/app.js?v=2.11"></script>
 </body>
 </html>

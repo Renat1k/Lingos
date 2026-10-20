@@ -1067,7 +1067,6 @@
     });
     window.addEventListener("online", () => {
       if (cloudUserId && supabaseClient) {
-        setSyncStatus("saving");
         void pushCloudData();
       } else {
         setSyncStatus("local");

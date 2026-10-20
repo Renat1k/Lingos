@@ -8,9 +8,18 @@
     let cloudTimer = null;
     let cloudPushInFlight = false;
     let cloudPushQueued = false;
+    let cloudPullPromise = null;
     let cloudApplying = false;
     let cloudInitialized = false;
     let cloudDataColumn = "data";
+    let cloudActivityDepth = 0;
+    let cloudStatusTimer = null;
+    let cloudPendingRefresh = null;
+    let cloudDeferredArmed = false;
+    let cloudLastPushFingerprint = "";
+    try {
+      cloudLastPushFingerprint = window.localStorage.getItem("lingua_cloud_last_push_fingerprint") || "";
+    } catch (error) { /* storage can be unavailable */ }
     /* ---------- cloud sync / Supabase ---------- */
     function cloudConfigReady() {
       return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -77,6 +86,10 @@
         blocked: { emoji: "🟠", label: t("cloud_not_ready") }
       };
       const stateConfig = states[nextState] || states.local;
+      if (nextState !== "saving") {
+        window.clearTimeout(cloudStatusTimer);
+        cloudStatusTimer = null;
+      }
       currentSyncState = nextState in states ? nextState : "local";
       if (syncStatus) {
         syncStatus.dataset.state = currentSyncState;
@@ -99,12 +112,29 @@
       if (profileNote) profileNote.textContent = t(currentSyncState === "blocked" ? "cloud_not_ready_hint" : "profile_sync_hint");
     }
 
+    function beginCloudActivity() {
+      cloudActivityDepth += 1;
+      window.clearTimeout(cloudStatusTimer);
+      cloudStatusTimer = window.setTimeout(() => {
+        cloudStatusTimer = null;
+        if (cloudActivityDepth > 0) setSyncStatus("saving");
+      }, 700);
+    }
+
+    function endCloudActivity(success) {
+      cloudActivityDepth = Math.max(0, cloudActivityDepth - 1);
+      if (cloudActivityDepth > 0) return;
+      window.clearTimeout(cloudStatusTimer);
+      cloudStatusTimer = null;
+      if (success) setSyncStatus("synced");
+    }
+
     function collectCloudPayload() {
       const values = {};
       try {
         for (let index = 0; index < window.localStorage.length; index += 1) {
           const key = window.localStorage.key(index);
-          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key.startsWith("lingua_cloud_")) continue;
+          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith("lingua_cloud_")) continue;
           const raw = window.localStorage.getItem(key);
           if (raw == null) continue;
           try {
@@ -208,22 +238,28 @@
     }
 
     function applyCloudPayload(payload) {
-      if (!payload || typeof payload !== "object" || !payload.values || typeof payload.values !== "object") return false;
+      if (!payload || typeof payload !== "object" || !payload.values || typeof payload.values !== "object") {
+        return { changed: false, keys: [] };
+      }
       cloudApplying = true;
-      let changed = false;
+      const changedKeys = [];
       try {
         if (Array.isArray(payload.values[DELETED_KEY])) {
           const mergedDeleted = mergeTombstones(loadTombstones(), payload.values[DELETED_KEY]);
           try {
-            window.localStorage.setItem(DELETED_KEY, JSON.stringify(mergedDeleted));
-            changed = true;
+            const previous = window.localStorage.getItem(DELETED_KEY);
+            const next = JSON.stringify(mergedDeleted);
+            if (previous !== next) {
+              window.localStorage.setItem(DELETED_KEY, next);
+              changedKeys.push(DELETED_KEY);
+            }
           } catch (error) {
             console.warn("Could not apply cloud tombstones.", error);
           }
         }
         Object.entries(payload.values).forEach(([key, value]) => {
           if (key === DELETED_KEY) return;
-          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE) return;
+          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE) return;
           let nextValue = value;
           if (key === UI_SETTINGS_KEY) {
             nextValue = mergeSettingsValue(readJSON(key, null), value);
@@ -233,8 +269,12 @@
             nextValue = mergeCloudCollection(key, readJSON(key, []), value);
           }
           try {
-            window.localStorage.setItem(key, JSON.stringify(nextValue));
-            changed = true;
+            const next = JSON.stringify(nextValue);
+            if (next == null) return;
+            const previous = window.localStorage.getItem(key);
+            if (previous === next) return;
+            window.localStorage.setItem(key, next);
+            changedKeys.push(key);
           } catch (error) {
             console.warn(`Could not apply cloud key ${key}.`, error);
           }
@@ -242,32 +282,184 @@
       } finally {
         cloudApplying = false;
       }
-      return changed;
+      return { changed: changedKeys.length > 0, keys: changedKeys };
     }
 
-    function refreshAfterCloudApply() {
-      state.languagePacks = normalizeLanguagePacks(state.rootData);
-      renderLanguageLists();
-      loadSettings();
+    function cloudUIBlocked() {
+      const active = document.activeElement;
+      const editingField = active && (
+        active.tagName === "INPUT"
+        || active.tagName === "TEXTAREA"
+        || active.tagName === "SELECT"
+        || active.isContentEditable
+      );
+      return Boolean(editingField || document.querySelector("dialog[open]"));
+    }
+
+    function armCloudDeferredRefresh() {
+      if (cloudDeferredArmed) return;
+      cloudDeferredArmed = true;
+      let fired = false;
+      const attempt = () => {
+        if (fired) return;
+        fired = true;
+        document.removeEventListener("focusout", attempt, true);
+        document.removeEventListener("click", attempt, true);
+        document.removeEventListener("close", attempt, true);
+        window.setTimeout(() => {
+          cloudDeferredArmed = false;
+          if (!cloudPendingRefresh) return;
+          if (cloudUIBlocked()) armCloudDeferredRefresh();
+          else flushCloudRefresh();
+        }, 60);
+      };
+      document.addEventListener("focusout", attempt, true);
+      document.addEventListener("click", attempt, true);
+      document.addEventListener("close", attempt, true);
+    }
+
+    function flushCloudRefresh() {
+      if (!cloudPendingRefresh) return;
+      if (cloudUIBlocked()) {
+        armCloudDeferredRefresh();
+        return;
+      }
+      const pending = cloudPendingRefresh;
+      cloudPendingRefresh = null;
+      if (pending.languageLists) {
+        renderLanguageLists();
+        if (typeof syncLanguageUI === "function") syncLanguageUI();
+      }
+      if (pending.render === "dashboard" && state.view === "dashboard") renderDashboard();
+      else if (pending.render === "stories" && state.view === "stories") renderStoriesHub();
+      else if (pending.render === "vocabulary" && state.view === "vocabulary") renderVocabularyHub();
+    }
+
+    function queueCloudRefresh(keys, options = {}) {
+      const pending = cloudPendingRefresh || { keys: new Set(), render: null, languageLists: false };
+      (keys || []).forEach((key) => pending.keys.add(key));
+      if (options.render) pending.render = options.render;
+      if (options.languageLists) pending.languageLists = true;
+      cloudPendingRefresh = pending;
+      if (cloudUIBlocked()) armCloudDeferredRefresh();
+      else flushCloudRefresh();
+    }
+
+    function cloudLanguageDisplay(code) {
+      if (!code) return "—";
+      return state.languagePacks?.[code]?.label || LANGUAGE_META?.[code]?.label || String(code).toUpperCase();
+    }
+
+    function switchCloudLanguageIfMissing() {
       const active = activeLanguageCodes();
-      if (!active.length) {
+      if (state.language && active.includes(state.language)) return null;
+      const previous = state.language;
+      const next = active[0] || null;
+      if (!next) {
         state.language = null;
         state.languagePack = null;
+        state.data = null;
         state.lessons = [];
         state.stories = [];
         state.vocab = [];
         state.settings.language = null;
-        closeProfileModal();
         applySettings();
         renderNoActiveCourses();
+        return "none";
+      }
+      activateLanguageData(next);
+      state.settings.language = next;
+      applySettings();
+      let render = "dashboard";
+      if (state.view === "stories") render = "stories";
+      else if (state.view === "vocabulary") render = "vocabulary";
+      else if (state.view !== "dashboard") {
+        state.view = "dashboard";
+        state.lesson = null;
+        state.lessonId = null;
+        state.story = null;
+        state.storyId = null;
+        state.backTarget = "#dashboard";
+      }
+      const targetHash = render === "stories" ? "#stories" : render === "vocabulary" ? "#vocabulary" : "#dashboard";
+      if (window.location.hash !== targetHash) window.history.replaceState(null, "", targetHash);
+      if (previous && previous !== next) {
+        showToast(t("sync_language_switched", {
+          language: cloudLanguageDisplay(previous),
+          next: cloudLanguageDisplay(next)
+        }), "info");
+      }
+      return render;
+    }
+
+    function refreshAfterCloudApply(change) {
+      const keys = Array.isArray(change?.keys) ? change.keys : [];
+      if (!keys.length) return;
+      const keySet = new Set(keys);
+      const previousUILanguage = state.settings.uiLanguage;
+      const previousLanguage = state.language;
+      const languageTombstone = keySet.has(DELETED_KEY)
+        && loadTombstones().some((item) => item.type === "language");
+      let languageLists = keySet.has(CUSTOM_LANGUAGES_KEY) || languageTombstone;
+
+      if (keySet.has(CUSTOM_LANGUAGES_KEY) || languageTombstone) {
+        state.languagePacks = normalizeLanguagePacks(state.rootData);
+        if (state.language && state.languagePacks[state.language]) {
+          state.languagePack = state.languagePacks[state.language];
+          state.data = { ...state.languagePack, meta: state.rootData?.meta || {} };
+        }
+      }
+
+      if (keySet.has(UI_SETTINGS_KEY)) {
+        loadSettings();
+        if (previousLanguage && activeLanguageCodes().includes(previousLanguage)) {
+          state.settings.language = previousLanguage;
+        }
+        applySettings();
+      }
+      if (state.settings.uiLanguage !== previousUILanguage) languageLists = true;
+      const uiLanguageChanged = state.settings.uiLanguage !== previousUILanguage;
+
+      const switchedRender = switchCloudLanguageIfMissing();
+      if (switchedRender === "none") return;
+      if (switchedRender) {
+        queueCloudRefresh(keys, { render: switchedRender, languageLists: true });
         return;
       }
-      const language = active.includes(state.settings.language) ? state.settings.language : active[0];
-      activateLanguageData(language);
-      applySettings();
-      closeProfileModal();
-      if (window.location.hash === "#dashboard" || !window.location.hash) renderDashboard();
-      else window.location.hash = "#dashboard";
+
+      const current = state.language;
+      const vocabKey = current ? `lingua_${current}_vocab` : "";
+      const importedLessonKey = current ? importedLessonsKey() : "";
+      const importedStoryKey = current ? importedStoriesKey() : "";
+      const vocabChanged = Boolean(vocabKey && keySet.has(vocabKey)) || keySet.has(DELETED_KEY);
+      const lessonsChanged = Boolean(importedLessonKey && keySet.has(importedLessonKey));
+      const storiesChanged = Boolean(importedStoryKey && keySet.has(importedStoryKey));
+      const hiddenChanged = keySet.has(HIDDEN_CONTENT_KEY);
+
+      if (vocabChanged) {
+        const search = state.vocabSearch;
+        const tag = state.vocabTag;
+        loadVocabulary(state.languagePack?.vocab || []);
+        state.vocabSearch = search;
+        state.vocabTag = tag;
+      }
+      if (lessonsChanged || storiesChanged) {
+        loadImportedCollections();
+        state.lessons = mergeById(state.languagePack?.lessons || [], state.importedLessons);
+        state.stories = mergeById(state.languagePack?.stories || [], state.importedStories);
+      }
+
+      let render = null;
+      if (state.view === "vocabulary" && vocabChanged) render = "vocabulary";
+      else if (state.view === "stories" && (storiesChanged || hiddenChanged)) render = "stories";
+      else if (state.view === "dashboard" && (lessonsChanged || hiddenChanged)) render = "dashboard";
+      if (uiLanguageChanged && !render) {
+        if (state.view === "dashboard") render = "dashboard";
+        else if (state.view === "stories") render = "stories";
+        else if (state.view === "vocabulary") render = "vocabulary";
+      }
+
+      if (languageLists || render) queueCloudRefresh(keys, { render, languageLists });
     }
 
     function extractCloudPayload(row) {
@@ -292,6 +484,26 @@
       return null;
     }
 
+    function stableSerialize(value) {
+      if (value === null || typeof value !== "object") return JSON.stringify(value);
+      if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+    }
+
+    function payloadSignature(values) {
+      return stableSerialize(values || {});
+    }
+
+    function payloadFingerprint(values) {
+      const text = payloadSignature(values);
+      let hash = 2166136261;
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(36);
+    }
+
     async function pushCloudData(options = {}) {
       const skipPull = Boolean(options.skipPull);
       if (!cloudConfigReady() || !cloudUserId || !navigator.onLine) {
@@ -302,45 +514,52 @@
         cloudPushQueued = true;
         return false;
       }
-      if (!skipPull) {
-        const pulled = await pullCloudData(false);
-        if (!pulled) return false;
-      }
       cloudPushInFlight = true;
       cloudPushQueued = false;
-      setSyncStatus("saving");
       try {
-        const client = supabaseClient || await ensureSupabaseClient();
-        const payload = collectCloudPayload();
-        const columns = cloudDataColumn
-          ? [cloudDataColumn, ...CLOUD_DATA_COLUMNS.filter((column) => column !== cloudDataColumn)]
-          : [...CLOUD_DATA_COLUMNS];
-        let lastError = null;
-        let saved = false;
-        for (const column of columns) {
-          const row = { user_id: cloudUserId, [column]: payload };
-          if (state.authUser?.email) row.user_email = state.authUser.email;
-          const { error } = await client
-            .from(CLOUD_TABLE)
-            .upsert(row, { onConflict: "user_id" });
-          if (!error) {
-            cloudDataColumn = column;
-            saved = true;
-            break;
-          }
-          lastError = error;
+        if (!skipPull) {
+          const pulled = await pullCloudData(false);
+          if (!pulled) return false;
         }
-        if (!saved) throw lastError || new Error("Supabase upsert failed.");
+        beginCloudActivity();
         try {
-          window.localStorage.setItem(CLOUD_META_KEY, new Date().toISOString());
-        } catch (error) { /* storage can be unavailable */ }
-        setSyncStatus("synced");
-        return true;
-      } catch (error) {
-        console.warn("Cloud sync save failed.", error);
-        if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
-        else setSyncStatus("local");
-        return false;
+          const client = supabaseClient || await ensureSupabaseClient();
+          const payload = collectCloudPayload();
+          const columns = cloudDataColumn
+            ? [cloudDataColumn, ...CLOUD_DATA_COLUMNS.filter((column) => column !== cloudDataColumn)]
+            : [...CLOUD_DATA_COLUMNS];
+          let lastError = null;
+          let saved = false;
+          for (const column of columns) {
+            const row = { user_id: cloudUserId, [column]: payload };
+            if (state.authUser?.email) row.user_email = state.authUser.email;
+            const { error } = await client
+              .from(CLOUD_TABLE)
+              .upsert(row, { onConflict: "user_id" });
+            if (!error) {
+              cloudDataColumn = column;
+              saved = true;
+              break;
+            }
+            lastError = error;
+          }
+          if (!saved) throw lastError || new Error("Supabase upsert failed.");
+          try {
+            window.localStorage.setItem(CLOUD_META_KEY, new Date().toISOString());
+          } catch (error) { /* storage can be unavailable */ }
+          cloudLastPushFingerprint = payloadFingerprint(payload.values);
+          try {
+            window.localStorage.setItem("lingua_cloud_last_push_fingerprint", cloudLastPushFingerprint);
+          } catch (error) { /* storage can be unavailable */ }
+          endCloudActivity(true);
+          return true;
+        } catch (error) {
+          endCloudActivity(false);
+          console.warn("Cloud sync save failed.", error);
+          if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
+          else setSyncStatus("local");
+          return false;
+        }
       } finally {
         cloudPushInFlight = false;
         if (cloudPushQueued) {
@@ -360,7 +579,6 @@
         setSyncStatus("local");
         return;
       }
-      setSyncStatus("saving");
       window.clearTimeout(cloudTimer);
       cloudTimer = window.setTimeout(() => {
         cloudTimer = null;
@@ -373,25 +591,43 @@
         setSyncStatus("local");
         return false;
       }
-      setSyncStatus("saving");
+      if (cloudPullPromise) return cloudPullPromise;
+      cloudPullPromise = (async () => {
+        beginCloudActivity();
+        try {
+          const client = supabaseClient || await ensureSupabaseClient();
+          const { data, error } = await client
+            .from(CLOUD_TABLE)
+            .select("*")
+            .eq("user_id", cloudUserId)
+            .maybeSingle();
+          if (error) throw error;
+          const payload = extractCloudPayload(data);
+          const change = payload ? applyCloudPayload(payload) : { changed: false, keys: [] };
+          const remoteFingerprint = payload ? payloadFingerprint(payload.values) : "";
+          const isOwnPush = Boolean(remoteFingerprint && cloudLastPushFingerprint && remoteFingerprint === cloudLastPushFingerprint);
+          if (change.changed) {
+            if (!isOwnPush) {
+              showToast(t("sync_updated_remote"), "info");
+            }
+            refreshAfterCloudApply(change);
+          }
+          let pushOK = true;
+          if (pushAfter) pushOK = await pushCloudData({ skipPull: true });
+          endCloudActivity(pushOK);
+          return true;
+        } catch (error) {
+          endCloudActivity(false);
+          console.warn("Cloud sync load failed.", error);
+          if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
+          else setSyncStatus("local");
+          return false;
+        }
+      })();
       try {
-        const client = supabaseClient || await ensureSupabaseClient();
-        const { data, error } = await client
-          .from(CLOUD_TABLE)
-          .select("*")
-          .eq("user_id", cloudUserId)
-          .maybeSingle();
-        if (error) throw error;
-        const payload = extractCloudPayload(data);
-        const applied = payload ? applyCloudPayload(payload) : false;
-        if (applied) refreshAfterCloudApply();
-        if (pushAfter) await pushCloudData({ skipPull: true });
-        return true;
-      } catch (error) {
-        console.warn("Cloud sync load failed.", error);
-        if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
-        else setSyncStatus("local");
-        return false;
+        return await cloudPullPromise;
+      } finally {
+        cloudPullPromise = null;
       }
     }
 
@@ -403,7 +639,6 @@
       }
       try {
         await ensureSupabaseClient();
-        setSyncStatus("saving");
         await pullCloudData();
       } catch (error) {
         console.warn("Cloud sync start failed.", error);
@@ -426,7 +661,6 @@
         if (session?.user) {
           if (typeof hydrateAuthSession === "function") hydrateAuthSession(session);
           cloudUserId = String(session.user.id);
-          setSyncStatus("saving");
           await pullCloudData();
         } else {
           cloudUserId = null;

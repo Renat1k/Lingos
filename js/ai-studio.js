@@ -53,28 +53,51 @@ Rules:
       { id: "level", label: "ai_diag_level", options: ["ai_level_a1", "ai_level_a2", "ai_level_b1", "ai_level_b2"] }
     ];
 
-    let geminiModelCache = "";
+    let geminiModelsCache = [];
+    let geminiModelsPromise = null;
+    let geminiLastActualModel = "";
+    let geminiLastFallback = null;
+    let geminiPickerToken = 0;
     let aiSelectionState = null;
     let aiSelectionTimer = null;
-    let aiGeneratedState = null;
-    let aiStudioBusy = false;
+    let aiLastAnalysis = null;
     const aiAnalyzeButton = document.getElementById("aiAnalyzeBtn");
 
-    /* ---------- Gemini transport ---------- */
+    /* ---------- Gemini transport, models and errors ---------- */
 
     function getGeminiKey() {
       return String(state.geminiKey || "").trim();
     }
 
-    function geminiError(code, status) {
+    function geminiError(code, status, detail = {}) {
       const error = new Error(code || "gemini_error");
       error.geminiCode = code || "gemini_error";
       if (status) error.geminiStatus = status;
+      Object.assign(error, detail);
       return error;
+    }
+
+    function geminiApiMessage(error) {
+      const message = String(error?.geminiApiMessage || "").trim().slice(0, 220);
+      const key = getGeminiKey();
+      return key && message.includes(key) ? message.replaceAll(key, "[redacted]") : message;
+    }
+
+    function geminiErrorTechnical(error) {
+      if (!error) return "";
+      const parts = [];
+      if (error.geminiModel) parts.push(error.geminiModel);
+      if (error.geminiFallbackFrom) parts.push(`${error.geminiFallbackFrom} → ${error.geminiModel || ""}`);
+      if (error.geminiStatus) parts.push(`HTTP ${error.geminiStatus}`);
+      if (error.geminiApiStatus) parts.push(String(error.geminiApiStatus));
+      if (error.geminiApiMessage) parts.push(geminiApiMessage(error));
+      if (error.geminiRetryDelay) parts.push(`retry ${error.geminiRetryDelay}`);
+      return parts.join(" · ");
     }
 
     function geminiErrorMessage(error) {
       if (!error) return t("gemini_error_generic");
+      const message = String(geminiApiMessage(error)).toLowerCase();
       if (error.geminiCode === "missing") return t("gemini_error_missing_key");
       if (error.geminiCode === "models") return t("gemini_error_models");
       if (error.geminiCode === "parse") return t("gemini_error_parse");
@@ -82,11 +105,36 @@ Rules:
       if (error.geminiCode === "validation") return t("gemini_error_validation");
       if (error.geminiCode === "network") return t("gemini_error_network");
       if (error.geminiCode === "timeout" || error.name === "AbortError") return t("gemini_error_timeout");
-      if (error.geminiStatus === 400) return t("gemini_error_400");
+      if (error.geminiCode === "blocked") return t("gemini_error_blocked", { reason: error.geminiReason || "unknown" });
+      if (error.geminiCode === "safety") return t("gemini_error_safety");
+      if (error.geminiCode === "recitation") return t("gemini_error_recitation");
+      if (error.geminiCode === "max_tokens") return t("gemini_error_max_tokens");
+      if (error.geminiCode === "finish") return t("gemini_error_finish", { reason: error.geminiReason || "unknown" });
+      if (error.geminiStatus === 400) {
+        if (/api key not valid|invalid api key|api_key_invalid|api key invalid|key invalid/.test(message)) {
+          return t("gemini_error_400_key");
+        }
+        if (/region|location|not available|unsupported/.test(message)) return t("gemini_error_region");
+        return t("gemini_error_400_request");
+      }
+      if (error.geminiStatus === 401) return t("gemini_error_401");
       if (error.geminiStatus === 403) return t("gemini_error_403");
-      if (error.geminiStatus === 429) return t("gemini_error_429");
+      if (error.geminiStatus === 404) return t("gemini_error_404");
+      if (error.geminiStatus === 429) {
+        const retry = error.geminiRetryDelay ? ` (${error.geminiRetryDelay})` : "";
+        if (error.geminiQuotaScope === "daily") return t("gemini_error_429_daily", { retry });
+        if (error.geminiQuotaScope === "minute") return t("gemini_error_429_minute", { retry });
+        return t("gemini_error_429", { retry });
+      }
+      if (error.geminiStatus >= 500) return t("gemini_error_5xx");
       if (error instanceof TypeError) return t("gemini_error_network");
       return t("gemini_error_generic");
+    }
+
+    function geminiErrorDisplay(error) {
+      const localized = geminiErrorMessage(error);
+      const technical = geminiErrorTechnical(error);
+      return technical ? `${localized} · ${technical}` : localized;
     }
 
     function setGeminiStatus(kind, detail) {
@@ -111,11 +159,26 @@ Rules:
       } catch (error) { /* storage can be unavailable */ }
     }
 
+    function savedGeminiModel() {
+      try {
+        return String(window.localStorage.getItem(GEMINI_MODEL_STORAGE) || state.geminiModel || "").trim();
+      } catch (error) {
+        return String(state.geminiModel || "").trim();
+      }
+    }
+
+    function saveGeminiModelPreference(name) {
+      const value = String(name || "").replace(/^models\//, "").trim();
+      if (!value) return;
+      state.geminiModel = value;
+      try { window.localStorage.setItem(GEMINI_MODEL_STORAGE, value); } catch (error) { /* storage can be unavailable */ }
+    }
+
     async function geminiRequest(path, options = {}) {
       const key = getGeminiKey();
       if (!key) throw geminiError("missing");
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), Number(options.timeout) || 22000);
+      const timer = window.setTimeout(() => controller.abort(), Number(options.timeout) || 30000);
       try {
         const response = await fetch(`${GEMINI_API_BASE}${path}`, {
           method: options.method || "GET",
@@ -126,59 +189,331 @@ Rules:
           body: options.body ? JSON.stringify(options.body) : undefined,
           signal: controller.signal
         });
-        if (!response.ok) throw geminiError("http", response.status);
-        return await response.json();
+        if (!response.ok) {
+          let apiError = {};
+          try {
+            const parsed = JSON.parse(await response.text());
+            apiError = parsed?.error && typeof parsed.error === "object" ? parsed.error : {};
+          } catch (error) { /* non-JSON error body */ }
+          const details = Array.isArray(apiError.details) ? apiError.details : [];
+          const retryInfo = details.find((item) => String(item?.["@type"] || "").includes("RetryInfo"));
+          const quotaFailure = details.find((item) => String(item?.["@type"] || "").includes("QuotaFailure"));
+          const quotaText = JSON.stringify(quotaFailure || {});
+          const quotaScope = /perday|daily/i.test(quotaText)
+            ? "daily"
+            : /perminute|minute/i.test(quotaText) ? "minute" : "";
+          throw geminiError("http", response.status, {
+            geminiModel: options.model || "",
+            geminiApiStatus: String(apiError.status || ""),
+            geminiApiMessage: String(apiError.message || ""),
+            geminiDetails: details,
+            geminiRetryDelay: String(retryInfo?.retryDelay || ""),
+            geminiQuotaScope: quotaScope
+          });
+        }
+        try {
+          return await response.json();
+        } catch (error) {
+          throw geminiError("parse");
+        }
       } catch (error) {
         if (error.geminiCode) throw error;
-        if (error.name === "AbortError") throw geminiError("timeout");
-        throw geminiError("network");
+        if (error.name === "AbortError") throw geminiError("timeout", null, { geminiModel: options.model || "" });
+        throw geminiError("network", null, { geminiModel: options.model || "" });
       } finally {
         window.clearTimeout(timer);
       }
     }
 
-    function flashModelScore(name) {
-      const match = String(name).match(/gemini-(\d+)(?:\.(\d+))?/);
-      let score = match ? Number(match[1]) * 100 + Number(match[2] || 0) : 0;
-      if (name.includes("flash-latest")) score += 15;
-      if (name.includes("preview")) score -= 1;
-      if (name.includes("lite")) score -= 8;
-      return score;
+    function modelInfo(raw) {
+      const name = String(raw?.name || "").replace(/^models\//, "").trim();
+      if (!name) return null;
+      const lower = name.toLowerCase();
+      const methods = Array.isArray(raw?.supportedGenerationMethods) ? raw.supportedGenerationMethods : [];
+      if (!methods.includes("generateContent")) return null;
+      const version = (() => {
+        const match = lower.match(/gemini-(\d+)(?:\.(\d+))?/);
+        return match ? Number(match[1]) * 100 + Number(match[2] || 0) : 0;
+      })();
+      return {
+        name,
+        displayName: String(raw?.displayName || name),
+        version,
+        flash: lower.includes("flash"),
+        lite: lower.includes("lite"),
+        stable: !/(preview|experimental|alpha|beta|(^|[-_.])exp([-_.]|$))/i.test(lower),
+        outputTokenLimit: Number(raw?.outputTokenLimit) || 0,
+        inputTokenLimit: Number(raw?.inputTokenLimit) || 0
+      };
     }
 
-    function selectFlashModel(models) {
-      const candidates = (Array.isArray(models) ? models : [])
-        .filter((model) => {
-          const name = String(model?.name || "").toLowerCase();
-          const methods = Array.isArray(model?.supportedGenerationMethods) ? model.supportedGenerationMethods : [];
-          return name.includes("flash")
-            && !name.includes("embedding")
-            && !name.includes("image")
-            && !name.includes("tts")
-            && (!methods.length || methods.includes("generateContent"));
-        })
-        .map((model) => ({
-          name: String(model.name || "").replace(/^models\//, ""),
-          score: flashModelScore(String(model.name || ""))
-        }))
-        .filter((model) => model.name)
-        .sort((a, b) => b.score - a.score || b.name.localeCompare(a.name));
-      if (!candidates.length) throw geminiError("models");
-      return candidates[0].name;
+    function modelDisplayName(model) {
+      return model?.displayName || model?.name || "";
+    }
+
+    function modelVersionScore(model) {
+      return model?.version || 0;
+    }
+
+    function modelSort(a, b, recommendedName = "") {
+      if (a.name === recommendedName) return -1;
+      if (b.name === recommendedName) return 1;
+      if (a.stable !== b.stable) return Number(b.stable) - Number(a.stable);
+      if (modelVersionScore(a) !== modelVersionScore(b)) return modelVersionScore(b) - modelVersionScore(a);
+      if (a.lite !== b.lite) return Number(a.lite) - Number(b.lite);
+      return a.name.localeCompare(b.name);
+    }
+
+    function recommendGeminiModel(models) {
+      if (!Array.isArray(models) || !models.length) return null;
+      const stableFlash = models.filter((model) => model.stable && model.flash)
+        .sort((a, b) => modelVersionScore(b) - modelVersionScore(a) || Number(a.lite) - Number(b.lite));
+      if (stableFlash.length) return stableFlash[0];
+      const stable = models.filter((model) => model.stable)
+        .sort((a, b) => modelVersionScore(b) - modelVersionScore(a));
+      if (stable.length) return stable[0];
+      const flash = models.filter((model) => model.flash)
+        .sort((a, b) => modelVersionScore(b) - modelVersionScore(a));
+      return flash[0] || models[0];
+    }
+
+    function sortedGeminiModels() {
+      const recommendation = recommendGeminiModel(geminiModelsCache);
+      return [...geminiModelsCache].sort((a, b) => modelSort(a, b, recommendation?.name || ""));
+    }
+
+    function selectedGeminiModel() {
+      const saved = savedGeminiModel();
+      const savedModel = geminiModelsCache.find((model) => model.name === saved);
+      if (savedModel) return savedModel;
+      return recommendGeminiModel(geminiModelsCache);
+    }
+
+    function fallbackGeminiModel(requestedName) {
+      const ordered = sortedGeminiModels();
+      const index = ordered.findIndex((model) => model.name === requestedName);
+      const after = index >= 0 ? ordered.slice(index + 1) : ordered;
+      return after.find((model) => model.name !== requestedName) || null;
+    }
+
+    function modelBadge(labelKey, className) {
+      return `<span class="gemini-model-badge ${className || ""}">${escapeHtml(t(labelKey))}</span>`;
+    }
+
+    function modelBadges(model, recommendedName) {
+      const badges = [];
+      if (model.name === recommendedName) badges.push(modelBadge("gemini_model_recommended", "is-recommended"));
+      badges.push(modelBadge(model.stable ? "gemini_model_stable" : "gemini_model_preview", model.stable ? "is-stable" : "is-preview"));
+      if (model.lite) badges.push(modelBadge("gemini_model_lite", "is-lite"));
+      return badges.join("");
+    }
+
+    function toggleGeminiModelMenu(show) {
+      const menu = document.getElementById("geminiModelMenu");
+      const trigger = document.getElementById("geminiModelTrigger");
+      if (!menu || !trigger) return;
+      const open = show === undefined ? menu.hidden : Boolean(show);
+      menu.hidden = !open;
+      trigger.setAttribute("aria-expanded", String(open));
+    }
+
+    function renderGeminiModelPicker() {
+      const trigger = document.getElementById("geminiModelTrigger");
+      const current = document.getElementById("geminiModelCurrent");
+      const menu = document.getElementById("geminiModelMenu");
+      if (!trigger || !current || !menu) return;
+      const selected = selectedGeminiModel();
+      if (!selected) {
+        current.textContent = "—";
+        menu.innerHTML = `<p class="gemini-model-empty">${escapeHtml(t("gemini_model_empty"))}</p>`;
+        return;
+      }
+      current.textContent = selected.name;
+      const recommendation = recommendGeminiModel(geminiModelsCache);
+      menu.innerHTML = sortedGeminiModels().map((model) => `
+        <button class="gemini-model-option${model.name === selected.name ? " is-selected" : ""}" type="button" role="option" aria-selected="${model.name === selected.name}" data-gemini-model="${escapeHtml(model.name)}">
+          <span class="gemini-model-option-copy">
+            <strong>${escapeHtml(model.name)}</strong>
+            <small>${escapeHtml(modelDisplayName(model))}</small>
+          </span>
+          <span class="gemini-model-badges">${modelBadges(model, recommendation?.name || "")}</span>
+        </button>
+      `).join("");
+    }
+
+    function setGeminiModelStatus(text, isError = false) {
+      const node = document.getElementById("geminiModelStatus");
+      if (!node) return;
+      node.textContent = text || "";
+      node.classList.toggle("is-error", isError);
     }
 
     async function fetchGeminiModels(force = false) {
-      if (geminiModelCache && !force) return geminiModelCache;
-      if (force) geminiModelCache = "";
-      const data = await geminiRequest("/models", { method: "GET", timeout: 12000 });
-      const model = selectFlashModel(data?.models);
-      geminiModelCache = model;
-      state.geminiModel = model;
-      return model;
+      if (geminiModelsCache.length && !force) return geminiModelsCache;
+      if (geminiModelsPromise && !force) return geminiModelsPromise;
+      if (force) geminiModelsCache = [];
+      geminiModelsPromise = (async () => {
+        const data = await geminiRequest("/models", { method: "GET", timeout: 16000 });
+        const models = (Array.isArray(data?.models) ? data.models : []).map(modelInfo).filter(Boolean);
+        if (!models.length) throw geminiError("models");
+        geminiModelsCache = models;
+        return models;
+      })();
+      try {
+        return await geminiModelsPromise;
+      } finally {
+        geminiModelsPromise = null;
+      }
     }
 
-    async function ensureGeminiModel(force = false) {
-      return fetchGeminiModels(force);
+    async function refreshGeminiModelPicker(force = false) {
+      const button = document.getElementById("geminiModelRefresh");
+      const token = ++geminiPickerToken;
+      if (!getGeminiKey()) {
+        geminiModelsCache = [];
+        renderGeminiModelPicker();
+        setGeminiModelStatus(t("gemini_error_missing_key"), true);
+        return;
+      }
+      if (button) button.disabled = true;
+      setGeminiModelStatus(t("gemini_model_loading"));
+      try {
+        await fetchGeminiModels(force);
+        if (token !== geminiPickerToken) return;
+        renderGeminiModelPicker();
+        const selected = selectedGeminiModel();
+        const saved = savedGeminiModel();
+        if (saved && !geminiModelsCache.some((model) => model.name === saved)) {
+          setGeminiModelStatus(t("gemini_model_not_found"), true);
+        } else {
+          setGeminiModelStatus(selected ? t("gemini_model_current", { model: selected.name }) : t("gemini_model_empty"));
+        }
+        if (force) showToast(t("gemini_model_refreshed"), "success");
+      } catch (error) {
+        if (token !== geminiPickerToken) return;
+        geminiModelsCache = [];
+        renderGeminiModelPicker();
+        setGeminiModelStatus(geminiErrorDisplay(error), true);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
+    function ensureGeminiModels() {
+      return geminiModelsCache.length ? Promise.resolve(geminiModelsCache) : fetchGeminiModels(false);
+    }
+
+    function ensureGeminiModel(force = false) {
+      return fetchGeminiModels(force).then(() => selectedGeminiModel()?.name || "");
+    }
+
+    function setGeminiFallbackNotice(requested, actual) {
+      if (!requested || !actual || requested === actual) return;
+      geminiLastFallback = { requested, actual };
+      const notice = document.getElementById("geminiFallbackNotice");
+      const text = document.getElementById("geminiFallbackText");
+      if (text) text.textContent = t("gemini_fallback_used", { requested, actual });
+      if (notice) notice.hidden = false;
+      showToast(t("gemini_fallback_used", { requested, actual }), "info");
+    }
+
+    function modelOutputCap(modelName) {
+      const model = geminiModelsCache.find((item) => item.name === modelName);
+      if (model?.outputTokenLimit) return model.outputTokenLimit;
+      return 16384;
+    }
+
+    function responseInfo(data) {
+      const candidate = data?.candidates?.[0];
+      const parts = candidate?.content?.parts;
+      return {
+        text: Array.isArray(parts) ? parts.filter((part) => !part?.thought).map((part) => String(part?.text || "")).join("").trim() : "",
+        blockReason: String(data?.promptFeedback?.blockReason || ""),
+        finishReason: String(candidate?.finishReason || "")
+      };
+    }
+
+    function emptyResponseError(info, model, maxOutputTokens) {
+      if (info.blockReason) {
+        return geminiError("blocked", null, { geminiReason: info.blockReason, geminiModel: model });
+      }
+      if (info.finishReason === "SAFETY") return geminiError("safety", null, { geminiModel: model });
+      if (info.finishReason === "RECITATION") return geminiError("recitation", null, { geminiModel: model });
+      if (info.finishReason === "MAX_TOKENS") {
+        return geminiError("max_tokens", null, { geminiModel: model, geminiMaxOutputTokens: maxOutputTokens });
+      }
+      if (info.finishReason) {
+        return geminiError("finish", null, { geminiReason: info.finishReason, geminiModel: model });
+      }
+      return geminiError("empty", null, { geminiModel: model });
+    }
+
+    async function requestGeneration(model, body, timeout = 60000) {
+      const data = await geminiRequest(`/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        body,
+        model,
+        timeout
+      });
+      const info = responseInfo(data);
+      if (!info.text) throw emptyResponseError(info, model, body.generationConfig.maxOutputTokens);
+      return { ...info, model };
+    }
+
+    async function requestGenerationWithFallback(requested, body) {
+      try {
+        return await requestGeneration(requested, body);
+      } catch (error) {
+        if (![429, 404, 503].includes(Number(error.geminiStatus))) throw error;
+        const fallback = fallbackGeminiModel(requested);
+        if (!fallback || fallback.name === requested) throw error;
+        try {
+          const result = await requestGeneration(fallback.name, body);
+          result.fallback = { requested, actual: fallback.name };
+          setGeminiFallbackNotice(requested, fallback.name);
+          return result;
+        } catch (fallbackError) {
+          fallbackError.geminiFallbackFrom = requested;
+          throw fallbackError;
+        }
+      }
+    }
+
+    async function generateGeminiText(prompt, options = {}) {
+      await ensureGeminiModels();
+      const requested = selectedGeminiModel();
+      if (!requested) throw geminiError("models");
+      const cap = modelOutputCap(requested.name);
+      const requestedMax = Math.max(1, Number(options.maxOutputTokens) || 4096);
+      const maxOutputTokens = Math.min(requestedMax, cap);
+      const body = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: Number.isFinite(options.temperature) ? options.temperature : 0.6,
+          maxOutputTokens
+        }
+      };
+      if (options.json) body.generationConfig.responseMimeType = "application/json";
+      if (options.system) body.systemInstruction = { parts: [{ text: options.system }] };
+      let result;
+      try {
+        result = await requestGenerationWithFallback(requested.name, body);
+      } catch (error) {
+        if (error.geminiCode === "max_tokens" && maxOutputTokens < cap) {
+          const retryMax = Math.min(cap, maxOutputTokens * 2);
+          if (retryMax > maxOutputTokens) {
+            body.generationConfig.maxOutputTokens = retryMax;
+            result = await requestGenerationWithFallback(requested.name, body);
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+      geminiLastActualModel = result.model;
+      geminiLastFallback = result.fallback || null;
+      return result.text;
     }
 
     async function testGeminiKey() {
@@ -190,45 +525,35 @@ Rules:
       }
       saveGeminiKey(key);
       geminiTest.disabled = true;
+      geminiPickerToken += 1;
       setGeminiStatus("checking");
+      setGeminiModelStatus(t("gemini_model_testing"));
       try {
-        const model = await ensureGeminiModel(true);
-        setGeminiStatus("ok", model);
-        showToast(t("connected"), "success");
+        await fetchGeminiModels(true);
+        renderGeminiModelPicker();
+        const selected = selectedGeminiModel();
+        if (!selected) throw geminiError("models");
+        await generateGeminiText("Reply with the single word OK.", {
+          temperature: 0,
+          maxOutputTokens: 512
+        });
+        const actual = geminiLastActualModel || selected.name;
+        setGeminiStatus("ok", actual);
+        setGeminiModelStatus(t("gemini_model_works", { model: actual }));
+        if (!geminiLastFallback) {
+          const notice = document.getElementById("geminiFallbackNotice");
+          if (notice) notice.hidden = true;
+        }
+        showToast(t("gemini_model_works", { model: actual }), "success");
       } catch (error) {
-        setGeminiStatus("error", geminiErrorMessage(error));
+        const detail = geminiErrorDisplay(error);
+        setGeminiStatus("error", detail);
+        setGeminiModelStatus(detail, true);
         showToast(geminiErrorMessage(error), "error");
       } finally {
         geminiTest.disabled = false;
       }
     }
-
-    function geminiTextFromResponse(data) {
-      const parts = data?.candidates?.[0]?.content?.parts;
-      return Array.isArray(parts) ? parts.map((part) => String(part?.text || "")).join("").trim() : "";
-    }
-
-    async function generateGeminiText(prompt, options = {}) {
-      const model = await ensureGeminiModel();
-      const body = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: Number.isFinite(options.temperature) ? options.temperature : 0.6,
-          maxOutputTokens: Number(options.maxOutputTokens) || 4096
-        }
-      };
-      if (options.json) body.generationConfig.responseMimeType = "application/json";
-      if (options.system) body.systemInstruction = { parts: [{ text: options.system }] };
-      const data = await geminiRequest(`/models/${encodeURIComponent(model)}:generateContent`, {
-        method: "POST",
-        body,
-        timeout: 45000
-      });
-      const text = geminiTextFromResponse(data);
-      if (!text) throw geminiError("empty");
-      return text;
-    }
-
     /* ---------- AI explain for selected text ---------- */
 
     function aiSelectableContainer(node) {
@@ -303,86 +628,889 @@ Rules:
       else modal.removeAttribute("open");
     }
 
-    function setAiAnalysisContent(text, isError = false) {
+    function setAiAnalysisContent(text, isError = false, showRetry = false) {
       const body = document.getElementById("aiAnalysisBody");
       if (!body) return;
       body.textContent = text;
       body.classList.toggle("is-error", isError);
+      const retry = document.getElementById("aiAnalysisRetry");
+      if (retry) retry.hidden = !showRetry;
     }
 
-    async function analyzeSelectedText() {
-      if (!aiSelectionState) return;
-      const { text, context } = aiSelectionState;
-      hideAiSelectionButton();
+    async function runAiAnalysis(text, context) {
       openAiAnalysisSheet();
       if (!getGeminiKey()) {
-        setAiAnalysisContent(t("ai_analysis_need_key"), true);
+        setAiAnalysisContent(t("ai_analysis_need_key"), true, false);
         return;
       }
       setAiAnalysisContent(t("ai_analysis_loading"));
       const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
       const prompt = `Разобрать фразу '${text}' из контекста '${context}'. Дай пословный перевод, грамматический разбор и объяснение идиом. Отвечай строго на языке UI: '${uiLanguage}'.`;
       try {
-        const answer = await generateGeminiText(prompt, { temperature: 0.25, maxOutputTokens: 1800 });
+        const answer = await generateGeminiText(prompt, { temperature: 0.25, maxOutputTokens: 4096 });
         setAiAnalysisContent(answer);
       } catch (error) {
-        setAiAnalysisContent(geminiErrorMessage(error), true);
+        setAiAnalysisContent(geminiErrorDisplay(error), true, true);
       }
     }
 
-    /* ---------- AI Studio ---------- */
-
-    function setAiStudioStatus(text, isError = false) {
-      const node = document.getElementById("aiStudioStatus");
-      if (!node) return;
-      node.textContent = text || "";
-      node.classList.toggle("is-error", isError);
+    async function analyzeSelectedText() {
+      if (!aiSelectionState) return;
+      const { text, context } = aiSelectionState;
+      aiLastAnalysis = { text, context };
+      hideAiSelectionButton();
+      await runAiAnalysis(text, context);
     }
 
-    function renderAiDiagnostics() {
-      const host = document.getElementById("aiDiagnostics");
-      if (!host) return;
-      host.innerHTML = AI_DIAGNOSTIC_QUESTIONS.map((question, questionIndex) => `
-        <fieldset class="ai-diagnostic" data-ai-question="${question.id}">
-          <legend>${escapeHtml(t(question.label))}</legend>
-          <div class="ai-diagnostic-options">
-            ${question.options.map((optionKey) => `
-              <label class="ai-diagnostic-option">
-                <input type="radio" name="ai-diag-${question.id}" value="${escapeHtml(optionKey)}" />
-                <span>${escapeHtml(t(optionKey))}</span>
-              </label>
-            `).join("")}
-          </div>
-        </fieldset>
-      `).join("");
+    /* ---------- AI Studio chat ---------- */
+
+    const AI_BLOCK_OPTIONS = [
+      { type: "theory", label: "ai_block_theory", mark: "◈" },
+      { type: "reading_heavy", label: "ai_block_reading", mark: "▤" },
+      { type: "dialogue", label: "ai_block_dialogue", mark: "◌" },
+      { type: "quiz", label: "ai_block_quiz", mark: "◇" },
+      { type: "practice_write", label: "ai_block_writing", mark: "✎" }
+    ];
+
+    let aiChatState = null;
+
+    function createAiChatState() {
+      return {
+        mode: null,
+        type: null,
+        question: null,
+        answers: {},
+        blocks: [],
+        diagnostics: null,
+        diagIndex: 0,
+        diagAnswers: {},
+        busy: false,
+        lastPrompt: "",
+        lastType: null,
+        generated: null,
+        refining: false,
+        customPrompt: "",
+        imported: false
+      };
     }
 
-    function getAiDiagnostics() {
-      const answers = {};
-      for (const question of AI_DIAGNOSTIC_QUESTIONS) {
-        const selected = document.querySelector(`input[name="ai-diag-${question.id}"]:checked`);
-        if (!selected) return null;
-        answers[question.id] = selected.value;
+    function aiChatLogElement() {
+      return document.getElementById("aiChatLog");
+    }
+
+    function scrollAiChat() {
+      const log = aiChatLogElement();
+      if (log) log.scrollTop = log.scrollHeight;
+    }
+
+    function aiChatChip(label, action, value = "", options = {}) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `ai-chat-chip${options.active ? " is-active" : ""}${options.danger ? " is-danger" : ""}`;
+      button.textContent = label;
+      button.dataset.aiAction = action;
+      if (value) button.dataset.aiValue = value;
+      if (options.selected) button.classList.add("is-selected");
+      return button;
+    }
+
+    function appendAiChatActions(container, actions) {
+      if (!Array.isArray(actions) || !actions.length) return;
+      const row = document.createElement("div");
+      row.className = "ai-chat-chips ai-chat-actions";
+      actions.forEach((item) => row.appendChild(aiChatChip(item.label, item.action, item.value || "", item)));
+      container.appendChild(row);
+    }
+
+    function appendAiChatMessage(role, text, options = {}) {
+      const log = aiChatLogElement();
+      if (!log) return null;
+      const row = document.createElement("div");
+      row.className = `ai-chat-message ${role === "user" ? "is-user" : "is-assistant"}${options.kind ? ` is-${options.kind}` : ""}`;
+      const bubble = document.createElement("div");
+      bubble.className = "ai-chat-bubble";
+      if (text) bubble.textContent = text;
+      row.appendChild(bubble);
+      if (options.node) bubble.appendChild(options.node);
+      if (options.chips) {
+        const chips = document.createElement("div");
+        chips.className = "ai-chat-chips";
+        options.chips.forEach((item) => chips.appendChild(aiChatChip(item.label, item.action, item.value || "", item)));
+        bubble.appendChild(chips);
       }
-      return answers;
+      if (options.actions) appendAiChatActions(bubble, options.actions);
+      log.appendChild(row);
+      scrollAiChat();
+      return { row, bubble };
+    }
+
+    function appendAiChatStatus(text) {
+      const message = appendAiChatMessage("assistant", text, { kind: "status" });
+      if (!message) return { set() {}, done() {}, fail() {} };
+      return {
+        set(next, isError = false) {
+          message.bubble.textContent = next;
+          message.row.classList.toggle("is-error", isError);
+          scrollAiChat();
+        },
+        done(next) {
+          message.row.classList.add("is-done");
+          message.bubble.textContent = next || message.bubble.textContent;
+          scrollAiChat();
+        },
+        fail(next) {
+          message.row.classList.add("is-error");
+          message.bubble.textContent = next;
+          scrollAiChat();
+        }
+      };
+    }
+
+    function setAiChatHint(key, vars) {
+      const hint = document.getElementById("aiChatHint");
+      if (hint) hint.textContent = t(key, vars);
+    }
+
+    function setChatBusy(busy) {
+      if (!aiChatState) return;
+      aiChatState.busy = Boolean(busy);
+      const input = document.getElementById("aiChatInput");
+      const send = document.getElementById("aiChatSend");
+      const newChat = document.getElementById("aiChatNew");
+      if (input) input.disabled = Boolean(busy);
+      if (send) send.disabled = Boolean(busy);
+      if (newChat) newChat.disabled = Boolean(busy);
+      const shell = document.querySelector(".ai-chat-shell");
+      if (shell) shell.classList.toggle("is-busy", Boolean(busy));
+    }
+
+    function autoGrowChatInput() {
+      const input = document.getElementById("aiChatInput");
+      if (!input) return;
+      input.style.height = "auto";
+      input.style.height = `${Math.min(150, Math.max(42, input.scrollHeight))}px`;
+    }
+
+    function syncAiChatViewport() {
+      const modal = document.getElementById("aiStudioModal");
+      const panel = document.querySelector(".ai-studio-panel");
+      const shell = document.querySelector(".ai-chat-shell");
+      if (!modal?.open || !panel || !shell) return;
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const panelHeight = Math.min(680, Math.max(340, Math.round(viewport.height - 20)));
+        panel.style.maxHeight = `${panelHeight}px`;
+        shell.style.height = `${Math.max(260, panelHeight - 82)}px`;
+      }
+      scrollAiChat();
+    }
+
+    function aiTypeLabel(type) {
+      if (type === "stories") return t("ai_chat_story");
+      if (type === "vocab") return t("ai_chat_vocab");
+      return t("ai_chat_lesson");
+    }
+
+    function inferAiType(text) {
+      const value = String(text || "").toLowerCase();
+      if (/словар|слов|vocab|words|wortschatz|ordforråd|kelime/.test(value)) return "vocab";
+      if (/истор|story|stories|historie|hikâye|hikaye/.test(value)) return "stories";
+      return "lessons";
+    }
+
+    function detectPayloadType(payload) {
+      if (!payload || typeof payload !== "object") return null;
+      if (Array.isArray(payload.lessons) && payload.lessons.length) return "lessons";
+      if (Array.isArray(payload.stories) && payload.stories.length) return "stories";
+      if (Array.isArray(payload.vocab) && payload.vocab.length) return "vocab";
+      return null;
+    }
+
+    function resetAiChat() {
+      if (aiChatState?.busy) return;
+      aiChatState = createAiChatState();
+      const log = aiChatLogElement();
+      if (log) log.textContent = "";
+      setChatBusy(false);
+      setAiChatHint("ai_chat_hint");
+      const input = document.getElementById("aiChatInput");
+      if (input) {
+        input.value = "";
+        input.disabled = false;
+        input.focus();
+      }
+      autoGrowChatInput();
+      appendAiChatMessage("assistant", t("ai_chat_welcome"), {
+        chips: [
+          { label: t("ai_chat_lesson"), action: "type", value: "lessons" },
+          { label: t("ai_chat_story"), action: "type", value: "stories" },
+          { label: t("ai_chat_vocab"), action: "type", value: "vocab" },
+          { label: t("ai_chat_auto"), action: "auto" },
+          { label: t("ai_chat_custom"), action: "custom" },
+          { label: t("ai_chat_json"), action: "json" }
+        ]
+      });
+      appendAiChatMessage("assistant", t("ai_chat_welcome_hint"), {
+        chips: [{ label: t("ai_chat_diagnose"), action: "diagnose" }]
+      });
+    }
+
+    function startAiType(type) {
+      if (!aiChatState || aiChatState.busy) return;
+      aiChatState.mode = type;
+      aiChatState.type = type;
+      aiChatState.answers = {};
+      aiChatState.blocks = [];
+      aiChatState.blocksDecided = false;
+      aiChatState.question = "topic";
+      aiChatState.diagnostics = aiChatState.diagnostics || null;
+      appendAiChatMessage("user", aiTypeLabel(type));
+      appendAiChatMessage("assistant", t("ai_chat_topic_question"), {
+        chips: [{ label: t("ai_skip"), action: "skip" }]
+      });
+      setAiChatHint("ai_chat_topic_question");
+      document.getElementById("aiChatInput")?.focus();
+    }
+
+    function askAiLevel() {
+      if (!aiChatState) return;
+      aiChatState.question = "level";
+      const message = appendAiChatMessage("assistant", t("ai_chat_level_question"), { kind: "question" });
+      if (!message) return;
+      const wrap = document.createElement("div");
+      wrap.className = "ai-chat-select";
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "ai-chat-select-trigger";
+      trigger.dataset.aiSelectToggle = "level";
+      trigger.setAttribute("aria-haspopup", "listbox");
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.textContent = t("ai_studio_level");
+      const chevron = document.createElement("span");
+      chevron.className = "ai-chat-select-chevron";
+      chevron.textContent = "⌄";
+      trigger.appendChild(chevron);
+      const menu = document.createElement("div");
+      menu.className = "ai-chat-select-menu";
+      menu.setAttribute("role", "listbox");
+      menu.hidden = true;
+      [["A1", "ai_level_a1"], ["A2", "ai_level_a2"], ["B1", "ai_level_b1"], ["B2", "ai_level_b2"]].forEach(([value, key]) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "ai-chat-select-option";
+        option.setAttribute("role", "option");
+        option.dataset.aiLevel = value;
+        option.textContent = t(key);
+        menu.appendChild(option);
+      });
+      wrap.append(trigger, menu);
+      message.bubble.appendChild(wrap);
+      const chips = document.createElement("div");
+      chips.className = "ai-chat-chips";
+      chips.appendChild(aiChatChip(t("ai_skip"), "skip"));
+      message.bubble.appendChild(chips);
+      setAiChatHint("ai_chat_level_question");
+    }
+
+    function askAiCount() {
+      if (!aiChatState) return;
+      aiChatState.question = "count";
+      appendAiChatMessage("assistant", t("ai_chat_count_question"), {
+        chips: [
+          { label: t("ai_count_ten"), action: "count", value: "10" },
+          { label: t("ai_count_twenty"), action: "count", value: "20" },
+          { label: t("ai_count_thirty"), action: "count", value: "30" },
+          { label: t("ai_skip"), action: "skip" }
+        ]
+      });
+      setAiChatHint("ai_chat_count_question");
+    }
+
+    function askAiLength() {
+      if (!aiChatState) return;
+      aiChatState.question = "length";
+      appendAiChatMessage("assistant", t("ai_chat_length_question"), {
+        chips: [
+          { label: t("ai_length_short"), action: "length", value: "short" },
+          { label: t("ai_length_medium"), action: "length", value: "medium" },
+          { label: t("ai_length_long"), action: "length", value: "long" },
+          { label: t("ai_skip"), action: "skip" }
+        ]
+      });
+      setAiChatHint("ai_chat_length_question");
+    }
+
+    function askAiBlocks() {
+      if (!aiChatState) return;
+      aiChatState.question = "blocks";
+      aiChatState.blocks = [];
+      const message = appendAiChatMessage("assistant", t("ai_chat_blocks_question"), { kind: "question" });
+      if (!message) return;
+      const chips = document.createElement("div");
+      chips.className = "ai-chat-chips ai-block-picker";
+      AI_BLOCK_OPTIONS.forEach((block) => {
+        chips.appendChild(aiChatChip(`${block.mark} ${t(block.label)}`, "block", block.type));
+      });
+      message.bubble.appendChild(chips);
+      const controls = document.createElement("div");
+      controls.className = "ai-chat-chips";
+      controls.appendChild(aiChatChip(t("ai_chat_blocks_all"), "all-blocks"));
+      controls.appendChild(aiChatChip(t("ai_chat_blocks_ai"), "ai-blocks"));
+      controls.appendChild(aiChatChip(t("ai_chat_blocks_apply"), "apply-blocks"));
+      controls.appendChild(aiChatChip(t("ai_skip"), "skip"));
+      message.bubble.appendChild(controls);
+      setAiChatHint("ai_chat_blocks_question");
+    }
+
+    function nextAiQuestion() {
+      if (!aiChatState) return;
+      if (!aiChatState.answers.topic) {
+        aiChatState.question = "topic";
+        appendAiChatMessage("assistant", t("ai_chat_topic_question"), { chips: [{ label: t("ai_skip"), action: "skip" }] });
+        setAiChatHint("ai_chat_topic_question");
+        return;
+      }
+      if (aiChatState.mode === "vocab") {
+        if (!aiChatState.answers.count) return askAiCount();
+        if (!aiChatState.answers.level) return askAiLevel();
+      } else if (aiChatState.mode === "stories") {
+        if (!aiChatState.answers.length) return askAiLength();
+        if (!aiChatState.answers.level) return askAiLevel();
+      } else {
+        if (!aiChatState.answers.level) return askAiLevel();
+        if (!aiChatState.blocks.length && !aiChatState.blocksDecided) return askAiBlocks();
+      }
+      void beginAiGeneration();
+    }
+
+    function applyAiTopic(value) {
+      if (!aiChatState) return;
+      aiChatState.answers.topic = String(value || "").trim() || t("ai_topic_general");
+      nextAiQuestion();
+    }
+
+    function applyAiLevel(value) {
+      if (!aiChatState) return;
+      aiChatState.answers.level = String(value || "B1");
+      appendAiChatMessage("user", aiChatState.answers.level);
+      nextAiQuestion();
+    }
+
+    function applyAiCount(value) {
+      if (!aiChatState) return;
+      aiChatState.answers.count = Number(value) || 20;
+      appendAiChatMessage("user", String(aiChatState.answers.count));
+      nextAiQuestion();
+    }
+
+    function applyAiLength(value) {
+      if (!aiChatState) return;
+      aiChatState.answers.length = value || "medium";
+      appendAiChatMessage("user", t(value === "short" ? "ai_length_short" : value === "long" ? "ai_length_long" : "ai_length_medium"));
+      nextAiQuestion();
+    }
+
+    function finishAiBlocks() {
+      if (!aiChatState) return;
+      aiChatState.blocksDecided = true;
+      aiChatState.question = null;
+      void beginAiGeneration();
+    }
+
+    function startAiDiagnostics() {
+      if (!aiChatState || aiChatState.busy) return;
+      aiChatState.mode = "diagnostics";
+      aiChatState.diagIndex = 0;
+      aiChatState.diagAnswers = {};
+      aiChatState.diagnostics = null;
+      appendAiChatMessage("assistant", t("ai_chat_diag_intro"), {
+        chips: [{ label: t("ai_chat_diag_skip"), action: "diag-skip" }]
+      });
+      askAiDiagnostic();
+    }
+
+    function askAiDiagnostic() {
+      if (!aiChatState) return;
+      const question = AI_DIAGNOSTIC_QUESTIONS[aiChatState.diagIndex];
+      if (!question) {
+        aiChatState.diagnostics = { ...aiChatState.diagAnswers };
+        aiChatState.mode = null;
+        appendAiChatMessage("assistant", t("ai_chat_diag_done"), {
+          chips: [
+            { label: t("ai_chat_lesson"), action: "type", value: "lessons" },
+            { label: t("ai_chat_story"), action: "type", value: "stories" },
+            { label: t("ai_chat_vocab"), action: "type", value: "vocab" },
+            { label: t("ai_chat_auto"), action: "auto" }
+          ]
+        });
+        return;
+      }
+      appendAiChatMessage("assistant", t(question.label), {
+        chips: [
+          ...question.options.map((key) => ({ label: t(key), action: "diag", value: key })),
+          { label: t("ai_chat_diag_skip"), action: "diag-skip" }
+        ]
+      });
+      setAiChatHint("ai_chat_diag_intro");
+    }
+
+    function answerAiDiagnostic(value) {
+      if (!aiChatState) return;
+      const question = AI_DIAGNOSTIC_QUESTIONS[aiChatState.diagIndex];
+      if (!question) return;
+      aiChatState.diagAnswers[question.id] = value;
+      appendAiChatMessage("user", t(value));
+      aiChatState.diagIndex += 1;
+      askAiDiagnostic();
+    }
+
+    function skipAiDiagnostics() {
+      if (!aiChatState) return;
+      aiChatState.diagnostics = null;
+      aiChatState.mode = null;
+      appendAiChatMessage("assistant", t("ai_chat_diag_cancelled"), {
+        chips: [
+          { label: t("ai_chat_lesson"), action: "type", value: "lessons" },
+          { label: t("ai_chat_story"), action: "type", value: "stories" },
+          { label: t("ai_chat_vocab"), action: "type", value: "vocab" },
+          { label: t("ai_chat_auto"), action: "auto" }
+        ]
+      });
+    }
+
+    function startAiCustom(text) {
+      if (!aiChatState || aiChatState.busy) return;
+      aiChatState.mode = "custom";
+      aiChatState.type = inferAiType(text);
+      aiChatState.customPrompt = text;
+      aiChatState.answers = {};
+      aiChatState.blocks = [];
+      aiChatState.question = null;
+      aiChatState.refining = false;
+      appendAiChatMessage("assistant", t("ai_chat_custom_received"));
+      void beginAiGeneration({ prompt: text, type: aiChatState.type });
+    }
+
+    function startAiJson(text) {
+      if (!aiChatState || aiChatState.busy) return;
+      try {
+        const raw = parseGeminiJson(text);
+        const type = detectPayloadType(raw) || inferAiType(text);
+        const payload = validateGeneratedPayload(raw, type);
+        aiChatState.type = type;
+        aiChatState.lastPrompt = "";
+        aiChatState.lastType = type;
+        aiChatState.generated = { payload, type, imported: false };
+        appendAiChatStatus(t("ai_chat_validating"));
+        const status = appendAiChatStatus(t("ai_chat_done"));
+        status.done(t("ai_chat_done"));
+        appendAiPreviewCard(payload, type);
+      } catch (error) {
+        appendAiChatMessage("assistant", `${geminiErrorMessage(error)} · ${geminiErrorTechnical(error)}`, {
+          actions: [
+            { label: t("ai_chat_action_refine"), action: "refine" },
+            { label: t("ai_chat_action_key"), action: "key" }
+          ]
+        });
+      }
+    }
+
+    function startAiJsonMode() {
+      if (!aiChatState) return;
+      aiChatState.mode = "json";
+      aiChatState.question = "json";
+      appendAiChatMessage("assistant", t("ai_chat_json_prompt"));
+      setAiChatHint("ai_chat_json_prompt");
+      document.getElementById("aiChatInput")?.focus();
+    }
+
+    function startAiPromptMode() {
+      if (!aiChatState) return;
+      aiChatState.mode = "custom";
+      aiChatState.question = "custom";
+      appendAiChatMessage("assistant", t("ai_chat_custom_prompt"));
+      setAiChatHint("ai_chat_custom_prompt");
+      document.getElementById("aiChatInput")?.focus();
+    }
+
+    function buildAiPrompt(options = {}) {
+      if (!aiChatState) return "";
+      if (options.custom) return String(options.custom);
+      const type = options.type || aiChatState.type || "lessons";
+      const answers = aiChatState.answers;
+      const blocks = aiChatState.blocks.length ? aiChatState.blocks.join(", ") : "AI decides";
+      const weak = aiChatState.diagnostics
+        ? Object.values(aiChatState.diagnostics).map((key) => t(key)).join(", ")
+        : "";
+      const lines = [
+        `Create ${type} for the active learning language.`,
+        `UI language: ${UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский"}.`,
+        `Topic: ${answers.topic || t("ai_topic_general")}.`,
+        `Target level: ${answers.level || "B1"}.`
+      ];
+      if (answers.count) lines.push(`Vocabulary words: ${answers.count}.`);
+      if (answers.length) lines.push(`Story length: ${answers.length}.`);
+      if (type === "lessons") lines.push(`Blocks: ${blocks}.`);
+      if (weak) lines.push(`Learner weak areas: ${weak}.`);
+      lines.push(`Return one JSON object with only the "${type}" array.`);
+      if (options.previous) lines.push(`Previous result JSON: ${JSON.stringify(options.previous).slice(0, 12000)}`);
+      if (options.refinement) lines.push(`User refinement: ${options.refinement}`);
+      return lines.join("\n");
+    }
+
+    async function beginAiGeneration(options = {}) {
+      if (!aiChatState || aiChatState.busy) return;
+      if (!getGeminiKey()) {
+        appendAiChatMessage("assistant", t("ai_chat_no_key"), {
+          actions: [
+            { label: t("ai_chat_action_key"), action: "key" },
+            { label: t("ai_chat_action_change_model"), action: "change-model" }
+          ]
+        });
+        return;
+      }
+      const prompt = options.prompt || buildAiPrompt(options);
+      if (!prompt) return;
+      const type = options.type || aiChatState.type || inferAiType(prompt);
+      aiChatState.lastPrompt = prompt;
+      aiChatState.lastType = type;
+      aiChatState.refining = false;
+      setChatBusy(true);
+      setAiChatHint("ai_chat_generating");
+      appendAiChatStatus(t("ai_chat_status_key"));
+      try {
+        await ensureGeminiModels();
+        const selected = selectedGeminiModel();
+        if (!selected) throw geminiError("models");
+        appendAiChatStatus(t("ai_chat_status_model", { model: selected.name }));
+        appendAiChatStatus(t("ai_chat_generating"));
+        const text = await generateGeminiText(prompt, {
+          system: GEMINI_SYSTEM_PROMPT,
+          json: true,
+          temperature: 0.65,
+          maxOutputTokens: 16384
+        });
+        if (geminiLastActualModel && geminiLastActualModel !== selected.name) {
+          appendAiChatStatus(t("ai_chat_status_model", { model: geminiLastActualModel }));
+        }
+        appendAiChatStatus(t("ai_chat_validating"));
+        const raw = parseGeminiJson(text);
+        const actualType = detectPayloadType(raw) || type;
+        const payload = validateGeneratedPayload(raw, actualType);
+        aiChatState.type = actualType;
+        aiChatState.generated = { payload, type: actualType, imported: false };
+        const done = appendAiChatStatus(t("ai_chat_done"));
+        done.done(t("ai_chat_done"));
+        appendAiPreviewCard(payload, actualType);
+      } catch (error) {
+        const failedText = `${t("ai_chat_error")} · ${geminiErrorMessage(error)}`;
+        const failed = appendAiChatStatus(failedText);
+        failed.fail(failedText);
+        appendAiChatMessage("assistant", geminiErrorDisplay(error), {
+          actions: [
+            { label: t("ai_chat_action_retry"), action: "retry" },
+            { label: t("ai_chat_action_simplify"), action: "simplify" },
+            { label: t("ai_chat_action_change_model"), action: "change-model" },
+            { label: t("ai_chat_action_key"), action: "key" }
+          ]
+        });
+      } finally {
+        setChatBusy(false);
+        setAiChatHint("ai_chat_hint");
+      }
+    }
+
+    function appendAiPreviewCard(payload, type) {
+      const log = aiChatLogElement();
+      if (!log) return;
+      const row = document.createElement("div");
+      row.className = "ai-chat-message is-assistant is-preview";
+      const bubble = document.createElement("div");
+      bubble.className = "ai-chat-bubble ai-preview-card";
+      bubble.dataset.aiPreview = "1";
+      const header = document.createElement("div");
+      header.className = "ai-preview-head";
+      const titleWrap = document.createElement("div");
+      const kicker = document.createElement("span");
+      kicker.className = "ai-preview-kicker";
+      kicker.textContent = t("ai_chat_preview");
+      const title = document.createElement("strong");
+      const items = payload[type] || [];
+      const first = items[0] || {};
+      title.textContent = first.title || first.word || t("ai_chat_preview");
+      titleWrap.append(kicker, title);
+      header.appendChild(titleWrap);
+      if (first.level) {
+        const level = document.createElement("span");
+        level.className = "ai-preview-level";
+        level.textContent = first.level;
+        header.appendChild(level);
+      }
+      bubble.appendChild(header);
+      if (type === "vocab") {
+        buildVocabPreview(bubble, items);
+      } else {
+        buildContentPreview(bubble, first, type, items.length);
+      }
+      const details = document.createElement("details");
+      details.className = "ai-preview-json";
+      const summary = document.createElement("summary");
+      summary.textContent = t("ai_chat_show_json");
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(payload, null, 2);
+      details.append(summary, pre);
+      bubble.appendChild(details);
+      const actions = document.createElement("div");
+      actions.className = "ai-chat-chips ai-chat-actions ai-preview-actions";
+      const actionList = [
+        { label: t("ai_chat_action_add"), action: "add" },
+        { label: t("ai_chat_action_refine"), action: "refine" }
+      ];
+      if (aiChatState?.lastPrompt) actionList.splice(1, 0, { label: t("ai_chat_action_regenerate"), action: "regenerate" });
+      actionList.forEach((item) => actions.appendChild(aiChatChip(item.label, item.action)));
+      bubble.appendChild(actions);
+      row.appendChild(bubble);
+      log.appendChild(row);
+      scrollAiChat();
+    }
+
+    function buildContentPreview(bubble, item, type, count) {
+      const info = document.createElement("div");
+      info.className = "ai-preview-meta";
+      const typeLabel = document.createElement("span");
+      typeLabel.textContent = type === "stories" ? t("ai_chat_story") : t("ai_chat_lesson");
+      info.appendChild(typeLabel);
+      if (item.subtitle) {
+        const subtitle = document.createElement("span");
+        subtitle.textContent = item.subtitle;
+        info.appendChild(subtitle);
+      }
+      bubble.appendChild(info);
+      if (type === "stories") {
+        const text = document.createElement("p");
+        text.className = "ai-preview-excerpt";
+        text.textContent = String(item.text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 260);
+        bubble.appendChild(text);
+        const words = String(item.text || "").replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+        const meta = document.createElement("p");
+        meta.className = "ai-preview-count";
+        meta.textContent = t("ai_chat_preview_words", { n: words });
+        bubble.appendChild(meta);
+        return;
+      }
+      const blocks = Array.isArray(item.blocks) ? item.blocks : [];
+      const blockTitle = document.createElement("p");
+      blockTitle.className = "ai-preview-count";
+      blockTitle.textContent = `${t("ai_chat_preview_blocks")}: ${blocks.length}`;
+      bubble.appendChild(blockTitle);
+      const list = document.createElement("div");
+      list.className = "ai-preview-block-list";
+      blocks.forEach((block) => {
+        const option = AI_BLOCK_OPTIONS.find((entry) => entry.type === block.type);
+        const line = document.createElement("div");
+        line.className = "ai-preview-block";
+        const mark = document.createElement("span");
+        mark.textContent = option?.mark || "•";
+        const copy = document.createElement("span");
+        const blockName = option ? t(option.label) : String(block.type || "");
+        const detail = block.title || block.nav_label || block.text || block.prompt || "";
+        copy.textContent = `${blockName}${detail ? ` · ${String(detail).replace(/<[^>]+>/g, "").slice(0, 90)}` : ""}`;
+        line.append(mark, copy);
+        list.appendChild(line);
+      });
+      bubble.appendChild(list);
+      const questions = blocks
+        .filter((block) => block.type === "quiz")
+        .reduce((sum, block) => sum + (Array.isArray(block.questions) ? block.questions.length : 0), 0);
+      if (questions) {
+        const meta = document.createElement("p");
+        meta.className = "ai-preview-count";
+        meta.textContent = t("ai_chat_preview_questions", { n: questions });
+        bubble.appendChild(meta);
+      }
+      if (count > 1) {
+        const more = document.createElement("p");
+        more.className = "ai-preview-count";
+        more.textContent = `+${count - 1}`;
+        bubble.appendChild(more);
+      }
+    }
+
+    function buildVocabPreview(bubble, items) {
+      const table = document.createElement("table");
+      table.className = "ai-preview-vocab";
+      const body = document.createElement("tbody");
+      items.slice(0, 40).forEach((word) => {
+        const row = document.createElement("tr");
+        const source = document.createElement("td");
+        source.textContent = String(word.word || "");
+        const target = document.createElement("td");
+        target.textContent = String(word.translation || "");
+        row.append(source, target);
+        body.appendChild(row);
+      });
+      table.appendChild(body);
+      bubble.appendChild(table);
+      const meta = document.createElement("p");
+      meta.className = "ai-preview-count";
+      meta.textContent = t("ai_chat_preview_words", { n: items.length });
+      bubble.appendChild(meta);
+    }
+
+    function startAiRefine() {
+      if (!aiChatState || !aiChatState.generated) return;
+      aiChatState.refining = true;
+      aiChatState.question = "refine";
+      setAiChatHint("ai_chat_refine_hint");
+      const input = document.getElementById("aiChatInput");
+      if (input) {
+        input.disabled = false;
+        input.focus();
+      }
+    }
+
+    async function refineAiResult(text) {
+      if (!aiChatState) return;
+      if (!aiChatState.generated) {
+        if (!aiChatState.lastPrompt) return;
+        const prompt = `${aiChatState.lastPrompt}\nUser refinement: ${text}`;
+        await beginAiGeneration({ prompt, type: aiChatState.lastType });
+        return;
+      }
+      const previous = aiChatState.generated.payload;
+      const prompt = buildAiPrompt({
+        type: aiChatState.generated.type,
+        previous,
+        refinement: text
+      });
+      await beginAiGeneration({ prompt, type: aiChatState.generated.type });
+    }
+
+    function retryAiGeneration() {
+      if (!aiChatState?.lastPrompt) return;
+      void beginAiGeneration({ prompt: aiChatState.lastPrompt, type: aiChatState.lastType });
+    }
+
+    function regenerateAi() {
+      if (!aiChatState?.lastPrompt) return;
+      void beginAiGeneration({ prompt: aiChatState.lastPrompt, type: aiChatState.lastType });
+    }
+
+    function importAiPreview() {
+      if (!aiChatState?.generated || aiChatState.generated.imported) return;
+      try {
+        const result = importPayload(aiChatState.generated.payload);
+        aiChatState.generated.imported = true;
+        const message = t("ai_imported", {
+          lessons: result.lessonsAdded + result.lessonsUpdated,
+          stories: result.storiesAdded + result.storiesUpdated,
+          vocab: result.vocabAdded + result.vocabUpdated
+        });
+        appendAiChatMessage("assistant", message);
+        if (typeof rerenderCurrentView === "function") rerenderCurrentView();
+        showToast(t("ai_chat_imported"), "success");
+      } catch (error) {
+        appendAiChatMessage("assistant", geminiErrorDisplay(error), {
+          actions: [{ label: t("ai_chat_action_refine"), action: "refine" }]
+        });
+      }
+    }
+
+    function openAiStudioSettings() {
+      closeAiStudio();
+      if (typeof openSettings === "function") openSettings();
+      if (typeof setSettingsTab === "function") setSettingsTab("system");
+    }
+
+    function handleAiChatAction(action, value) {
+      if (!aiChatState) return;
+      if (action === "type") return startAiType(value);
+      if (action === "auto") {
+        aiChatState.mode = "lessons";
+        aiChatState.type = "lessons";
+        aiChatState.answers = { topic: t("ai_chat_auto"), level: "B1" };
+        appendAiChatMessage("user", t("ai_chat_auto"));
+        void beginAiGeneration();
+        return;
+      }
+      if (action === "custom") return startAiPromptMode();
+      if (action === "json") return startAiJsonMode();
+      if (action === "diagnose") return startAiDiagnostics();
+      if (action === "diag-skip") return skipAiDiagnostics();
+      if (action === "diag") return answerAiDiagnostic(value);
+      if (action === "count") return applyAiCount(value);
+      if (action === "length") return applyAiLength(value);
+      if (action === "block") {
+        if (!aiChatState.blocks.includes(value)) aiChatState.blocks.push(value);
+        else aiChatState.blocks = aiChatState.blocks.filter((item) => item !== value);
+        document.querySelectorAll(`.ai-block-picker [data-ai-value="${value}"]`).forEach((button) => {
+          button.classList.toggle("is-selected", aiChatState.blocks.includes(value));
+        });
+        return;
+      }
+      if (action === "all-blocks") {
+        aiChatState.blocks = AI_BLOCK_OPTIONS.map((block) => block.type);
+        finishAiBlocks();
+        return;
+      }
+      if (action === "ai-blocks" || action === "apply-blocks") {
+        if (action === "ai-blocks") aiChatState.blocks = [];
+        return finishAiBlocks();
+      }
+      if (action === "skip") {
+        if (aiChatState.question === "topic") applyAiTopic(t("ai_topic_general"));
+        else if (aiChatState.question === "count") applyAiCount("20");
+        else if (aiChatState.question === "length") applyAiLength("medium");
+        else if (aiChatState.question === "level") applyAiLevel("B1");
+        else if (aiChatState.question === "blocks") {
+          aiChatState.blocks = [];
+          finishAiBlocks();
+        }
+        else if (aiChatState.mode === "diagnostics") skipAiDiagnostics();
+        return;
+      }
+      if (action === "retry") return retryAiGeneration();
+      if (action === "regenerate") return regenerateAi();
+      if (action === "refine") return aiChatState.generated ? startAiRefine() : startAiJsonMode();
+      if (action === "add") return importAiPreview();
+      if (action === "change-model" || action === "key") return openAiStudioSettings();
+      if (action === "simplify") {
+        const text = t("ai_chat_action_simplify");
+        appendAiChatMessage("user", text);
+        void refineAiResult(text);
+      }
+    }
+
+    function handleAiChatSend() {
+      if (!aiChatState || aiChatState.busy) return;
+      const input = document.getElementById("aiChatInput");
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      autoGrowChatInput();
+      appendAiChatMessage("user", text);
+      if (aiChatState.mode === "json" || aiChatState.question === "json") return startAiJson(text);
+      if (aiChatState.refining || aiChatState.question === "refine") return void refineAiResult(text);
+      const looksLikePrompt = text.length > 90 || /(сделай|создай|сгенерируй|напиши|make|create|generate)/i.test(text);
+      if (!aiChatState.mode || aiChatState.question === "custom" || looksLikePrompt) return startAiCustom(text);
+      if (aiChatState.mode === "diagnostics") return startAiCustom(text);
+      if (aiChatState.question === "topic") return applyAiTopic(text);
+      if (aiChatState.question === "level") return applyAiLevel(text.toUpperCase().match(/A1|A2|B1|B2/)?.[0] || "B1");
+      if (aiChatState.question === "count") return applyAiCount(text.match(/\d+/)?.[0] || "20");
+      if (aiChatState.question === "length") return applyAiLength(text.toLowerCase().includes("short") ? "short" : text.toLowerCase().includes("long") ? "long" : "medium");
+      if (aiChatState.question === "blocks") return finishAiBlocks();
+      startAiCustom(text);
     }
 
     function openAiStudio() {
       const modal = document.getElementById("aiStudioModal");
       if (!modal) return;
-      aiGeneratedState = null;
-      const keyMissing = document.getElementById("aiStudioKeyMissing");
-      const main = document.getElementById("aiStudioMain");
-      const preview = document.getElementById("aiStudioPreview");
-      const form = document.getElementById("aiStudioForm");
-      if (keyMissing) keyMissing.hidden = Boolean(getGeminiKey());
-      if (main) main.hidden = !getGeminiKey();
-      if (preview) preview.hidden = true;
-      if (form) form.hidden = false;
-      setAiStudioStatus("");
-      renderAiDiagnostics();
+      if (!aiChatState) resetAiChat();
       if (typeof modal.showModal === "function") modal.showModal();
       else modal.setAttribute("open", "");
+      syncAiChatViewport();
+      document.getElementById("aiChatInput")?.focus();
     }
 
     function closeAiStudio() {
@@ -390,34 +1518,9 @@ Rules:
       if (!modal) return;
       if (modal.open && typeof modal.close === "function") modal.close();
       else modal.removeAttribute("open");
-      setAiStudioStatus("");
     }
 
-    function openAiKeySettings() {
-      closeAiStudio();
-      if (typeof openSettings === "function") openSettings();
-      if (typeof setSettingsTab === "function") setSettingsTab("system");
-    }
-
-    function aiStudioPrompt(answers) {
-      const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
-      const type = document.getElementById("aiContentType")?.value || "lessons";
-      const topic = document.getElementById("aiTopic")?.value.trim() || t("ai_topic_general");
-      const level = document.getElementById("aiLevel")?.value || "B1";
-      const weakAreas = [answers.skill, answers.grammar, answers.practice]
-        .map((key) => t(key))
-        .join(", ");
-      return [
-        `Learning language: ${languageLabel(currentLanguage())} (${currentLanguage()}).`,
-        `UI language: ${uiLanguage}.`,
-        `Feature focus: ${weakAreas}.`,
-        `Requested content type: ${type}.`,
-        `Topic: ${topic}.`,
-        `Target level: ${level}.`,
-        `Return one JSON object with only the "${type}" array.`,
-        "Use natural learner-facing text in the learning language."
-      ].join("\n");
-    }
+    /* ---------- AI Studio validation/import ---------- */
 
     function validateLessonBlocks(lesson) {
       const allowed = Object.keys(TYPE_META);
@@ -490,77 +1593,6 @@ Rules:
         throw geminiError("parse");
       }
     }
-
-    async function generateAiContent() {
-      if (aiStudioBusy) return;
-      if (!getGeminiKey()) {
-        setAiStudioStatus(t("ai_need_key"), true);
-        return;
-      }
-      const answers = getAiDiagnostics();
-      if (!answers) {
-        setAiStudioStatus(t("ai_diag_required"), true);
-        return;
-      }
-      const type = document.getElementById("aiContentType")?.value || "lessons";
-      const levelByDiagnostic = { ai_level_a1: "A1", ai_level_a2: "A2", ai_level_b1: "B1", ai_level_b2: "B2" };
-      const levelSelect = document.getElementById("aiLevel");
-      if (levelSelect && levelByDiagnostic[answers.level]) levelSelect.value = levelByDiagnostic[answers.level];
-      const generateButton = document.getElementById("aiStudioGenerate");
-      aiStudioBusy = true;
-      if (generateButton) generateButton.disabled = true;
-      setAiStudioStatus(t("ai_generating"));
-      try {
-        const text = await generateGeminiText(aiStudioPrompt(answers), {
-          system: GEMINI_SYSTEM_PROMPT,
-          json: true,
-          temperature: 0.65,
-          maxOutputTokens: 8192
-        });
-        const raw = parseGeminiJson(text);
-        const payload = validateGeneratedPayload(raw, type);
-        aiGeneratedState = { payload, type };
-        const preview = document.getElementById("aiStudioPreview");
-        const form = document.getElementById("aiStudioForm");
-        const json = document.getElementById("aiPreviewJson");
-        if (json) json.textContent = JSON.stringify(payload, null, 2);
-        if (form) form.hidden = true;
-        if (preview) preview.hidden = false;
-        setAiStudioStatus(t("ai_generated"));
-      } catch (error) {
-        setAiStudioStatus(geminiErrorMessage(error), true);
-      } finally {
-        aiStudioBusy = false;
-        if (generateButton) generateButton.disabled = false;
-      }
-    }
-
-    function backToAiForm() {
-      const preview = document.getElementById("aiStudioPreview");
-      const form = document.getElementById("aiStudioForm");
-      if (preview) preview.hidden = true;
-      if (form) form.hidden = false;
-      aiGeneratedState = null;
-      setAiStudioStatus("");
-    }
-
-    function importAiPreview() {
-      if (!aiGeneratedState) return;
-      try {
-        const result = importPayload(aiGeneratedState.payload);
-        const message = t("ai_imported", {
-          lessons: result.lessonsAdded + result.lessonsUpdated,
-          stories: result.storiesAdded + result.storiesUpdated,
-          vocab: result.vocabAdded + result.vocabUpdated
-        });
-        closeAiStudio();
-        if (typeof rerenderCurrentView === "function") rerenderCurrentView();
-        showToast(message, "success");
-      } catch (error) {
-        setAiStudioStatus(t("ai_invalid_schema"), true);
-      }
-    }
-
     /* ---------- listeners ---------- */
 
     document.addEventListener("selectionchange", scheduleAiSelectionButton);
@@ -576,8 +1608,51 @@ Rules:
     });
 
     document.getElementById("aiAnalysisClose")?.addEventListener("click", closeAiAnalysisSheet);
+    document.getElementById("aiAnalysisRetry")?.addEventListener("click", () => {
+      if (aiLastAnalysis) void runAiAnalysis(aiLastAnalysis.text, aiLastAnalysis.context);
+    });
     document.getElementById("aiAnalysisModal")?.addEventListener("click", (event) => {
       if (event.target.id === "aiAnalysisModal") closeAiAnalysisSheet();
+    });
+
+    document.getElementById("geminiModelTrigger")?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      if (!geminiModelsCache.length && getGeminiKey()) await refreshGeminiModelPicker(false);
+      toggleGeminiModelMenu();
+    });
+    document.getElementById("geminiModelRefresh")?.addEventListener("click", () => {
+      void refreshGeminiModelPicker(true);
+    });
+    document.getElementById("geminiModelMenu")?.addEventListener("click", (event) => {
+      const option = event.target.closest("[data-gemini-model]");
+      if (!option) return;
+      event.preventDefault();
+      saveGeminiModelPreference(option.dataset.geminiModel);
+      renderGeminiModelPicker();
+      setGeminiModelStatus(t("gemini_model_saved", { model: state.geminiModel }));
+      geminiLastFallback = null;
+      const notice = document.getElementById("geminiFallbackNotice");
+      if (notice) notice.hidden = true;
+      toggleGeminiModelMenu(false);
+    });
+    document.getElementById("geminiMakePrimary")?.addEventListener("click", () => {
+      if (!geminiLastFallback?.actual) return;
+      saveGeminiModelPreference(geminiLastFallback.actual);
+      renderGeminiModelPicker();
+      setGeminiModelStatus(t("gemini_primary_saved", { model: state.geminiModel }));
+      geminiLastFallback = null;
+      const notice = document.getElementById("geminiFallbackNotice");
+      if (notice) notice.hidden = true;
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".gemini-model-select")) toggleGeminiModelMenu(false);
+      if (event.target.closest("#settingsButton") || event.target.closest('[data-settings-tab="system"]')) {
+        window.setTimeout(() => { if (getGeminiKey()) void refreshGeminiModelPicker(false); }, 80);
+      }
+    });
+    geminiKeyInput?.addEventListener("change", () => {
+      if (getGeminiKey()) void refreshGeminiModelPicker(true);
+      else setGeminiModelStatus(t("gemini_error_missing_key"), true);
     });
 
     document.getElementById("openAiStudio")?.addEventListener("click", openAiStudio);
@@ -585,7 +1660,73 @@ Rules:
     document.getElementById("aiStudioModal")?.addEventListener("click", (event) => {
       if (event.target.id === "aiStudioModal") closeAiStudio();
     });
-    document.getElementById("aiStudioOpenKey")?.addEventListener("click", openAiKeySettings);
-    document.getElementById("aiStudioGenerate")?.addEventListener("click", generateAiContent);
-    document.getElementById("aiPreviewBack")?.addEventListener("click", backToAiForm);
-    document.getElementById("aiImportPreview")?.addEventListener("click", importAiPreview);
+    document.getElementById("aiChatNew")?.addEventListener("click", resetAiChat);
+    document.getElementById("aiChatSend")?.addEventListener("click", handleAiChatSend);
+    document.getElementById("aiChatInput")?.addEventListener("input", autoGrowChatInput);
+    document.getElementById("aiChatInput")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleAiChatSend();
+      }
+    });
+    document.getElementById("aiChatLog")?.addEventListener("click", (event) => {
+      if (!aiChatState) return;
+      if (aiChatState.busy) return;
+      const levelOption = event.target.closest("[data-ai-level]");
+      if (levelOption) {
+        event.preventDefault();
+        const menu = levelOption.closest(".ai-chat-select-menu");
+        const trigger = menu?.parentElement?.querySelector("[data-ai-select-toggle]");
+        if (menu) menu.hidden = true;
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+        applyAiLevel(levelOption.dataset.aiLevel);
+        return;
+      }
+      const selectTrigger = event.target.closest("[data-ai-select-toggle]");
+      if (selectTrigger) {
+        event.preventDefault();
+        const menu = selectTrigger.parentElement?.querySelector(".ai-chat-select-menu");
+        const open = Boolean(menu?.hidden);
+        document.querySelectorAll(".ai-chat-select-menu").forEach((node) => { node.hidden = true; });
+        document.querySelectorAll("[data-ai-select-toggle]").forEach((node) => node.setAttribute("aria-expanded", "false"));
+        if (menu) menu.hidden = !open;
+        selectTrigger.setAttribute("aria-expanded", String(Boolean(menu) && !menu.hidden));
+        return;
+      }
+      const action = event.target.closest("[data-ai-action]");
+      if (!action) return;
+      event.preventDefault();
+      handleAiChatAction(action.dataset.aiAction, action.dataset.aiValue || "");
+    });
+    document.getElementById("aiChatLog")?.addEventListener("keydown", (event) => {
+      const trigger = event.target.closest("[data-ai-select-toggle]");
+      const option = event.target.closest("[data-ai-level]");
+      const menu = trigger?.parentElement?.querySelector(".ai-chat-select-menu") || option?.closest(".ai-chat-select-menu");
+      if (option && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+        event.preventDefault();
+        const options = [...menu.querySelectorAll("[data-ai-level]")];
+        const index = options.indexOf(option);
+        const next = event.key === "ArrowDown" ? options[index + 1] : options[index - 1];
+        next?.focus();
+      } else if (trigger && (event.key === "Enter" || event.key === " " || event.key === "ArrowDown")) {
+        event.preventDefault();
+        if (menu) menu.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+        menu?.querySelector(".ai-chat-select-option")?.focus();
+      } else if (event.key === "Escape") {
+        const openMenus = [...document.querySelectorAll(".ai-chat-select-menu")].some((node) => !node.hidden);
+        if (openMenus) event.preventDefault();
+        document.querySelectorAll(".ai-chat-select-menu").forEach((node) => { node.hidden = true; });
+        document.querySelectorAll("[data-ai-select-toggle]").forEach((node) => node.setAttribute("aria-expanded", "false"));
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".ai-chat-select")) {
+        document.querySelectorAll(".ai-chat-select-menu").forEach((node) => { node.hidden = true; });
+        document.querySelectorAll("[data-ai-select-toggle]").forEach((node) => node.setAttribute("aria-expanded", "false"));
+      }
+    });
+    window.visualViewport?.addEventListener("resize", syncAiChatViewport);
+    window.addEventListener("resize", syncAiChatViewport);
+
+    if (!getGeminiKey()) setGeminiModelStatus(t("gemini_error_missing_key"), true);
