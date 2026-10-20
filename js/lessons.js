@@ -529,7 +529,7 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Курс завершён на ${stats.completion}%`);
       document.title = `LINGUA/OS — ${languageName} Dashboard`;
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `${language} / ${visibleLessons.length} modules · v2.7`;
+      if (footerMeta) footerMeta.textContent = `${language} / ${visibleLessons.length} modules · v2.8`;
       scrollToTopInstant();
     }
 
@@ -822,7 +822,7 @@
               <span class="reading-length">${icon("clock")} ${escapeHtml(block.word_count_label || "Reading")}</span>
               <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count>0 / 0</strong> слов открыто</span>
             </div>
-            <div class="reading-prose">${block.text || ""}</div>
+            <div class="reading-prose" data-ai-selectable="reading">${block.text || ""}</div>
             <div class="reading-footer">
               <div class="glossary-tip">
                 ${icon("book")}
@@ -859,7 +859,7 @@
                 </div>
                 <span class="messenger-chip">EN / LIVE</span>
               </div>
-              <div class="chat-body" tabindex="0" aria-label="Диалог ${escapeHtml(names)}">
+              <div class="chat-body" data-ai-selectable="dialogue" tabindex="0" aria-label="Диалог ${escapeHtml(names)}">
                 <div class="chat-date">${escapeHtml(block.date_label || "Today")}</div>
                 ${messages.map((message, messageIndex) => {
                   const person = byId[message.from] || { name: message.from || "Unknown", initials: "?", tone: "cyan" };

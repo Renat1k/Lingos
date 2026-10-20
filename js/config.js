@@ -12,6 +12,8 @@
     const UI_SETTINGS_KEY = "lingua_ui_settings";
     const PROFILE_KEY = "lingua_profile";
     const GEMINI_KEY_STORAGE = "lingua_gemini_key";
+    const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+    const GEMINI_KEY_HEADER = "x-goog-api-key";
     const CUSTOM_LANGUAGES_KEY = "lingua_custom_languages";
     const SUPABASE_URL = (document.querySelector('meta[name="supabase-url"]')?.content || "")
       .trim()
@@ -586,6 +588,136 @@
       }
     };
     Object.entries(C1_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const C2_UI_TRANSLATIONS = {
+      ru: {
+        gemini_checking: "Проверяю ключ и модели…", gemini_connected_model: "Подключено · {model}",
+        gemini_error_400: "Неверный API-ключ Gemini.", gemini_error_403: "Доступ к Gemini ограничен (регион или ключ).",
+        gemini_error_429: "Превышен лимит запросов Gemini. Попробуй позже.", gemini_error_timeout: "Gemini не ответил вовремя.",
+        gemini_error_network: "Нет сети или Gemini недоступен.", gemini_error_missing_key: "Сначала добавь Gemini API-ключ в настройках.",
+        gemini_error_models: "Не удалось получить список моделей Gemini.", gemini_error_generic: "Ошибка Gemini. Попробуй ещё раз.",
+        gemini_error_parse: "Ответ Gemini не удалось разобрать.", gemini_error_empty: "Gemini вернул пустой ответ.",
+        gemini_error_validation: "JSON не прошёл валидацию.",
+        ai_explain: "✨ ИИ-Разбор", ai_analysis_title: "ИИ-Разбор", ai_analysis_loading: "Разбираю фразу…",
+        ai_analysis_empty: "Нет выделенного текста.", ai_analysis_need_key: "Добавь Gemini API-ключ в настройках, чтобы использовать ИИ-Разбор.",
+        ai_analysis_close: "Закрыть", ai_analysis_context: "Контекст",
+        ai_studio_title: "AI Studio", ai_studio_open: "Открыть AI Studio", ai_studio_kicker: "AI STUDIO / ГЕНЕРАТОР", ai_explain_kicker: "GEMINI / РАЗБОР", ai_studio_hint_badge: "GEMINI / JSON",
+        ai_studio_hint: "Генерация уроков, историй и слов по диагностике слабых мест.",
+        ai_studio_diag_title: "Микро-диагностика", ai_studio_diag_hint: "Ответь на 4 вопроса — AI подстроит материал.",
+        ai_diag_skill: "Что даётся сложнее?", ai_diag_grammar: "Какая тема грамматики?",
+        ai_diag_practice: "Какой формат практики?", ai_diag_level: "Какой уровень?",
+        ai_skill_grammar: "Грамматика", ai_skill_vocab: "Словарь", ai_skill_reading: "Чтение", ai_skill_writing: "Письмо",
+        ai_grammar_tenses: "Времена", ai_grammar_articles: "Артикли", ai_grammar_prepositions: "Предлоги", ai_grammar_word_order: "Порядок слов",
+        ai_practice_reading: "Чтение", ai_practice_writing: "Письмо", ai_practice_quiz: "Квиз", ai_practice_dialogue: "Диалог",
+        ai_level_a1: "A1 — начальный", ai_level_a2: "A2 — базовый", ai_level_b1: "B1 — средний", ai_level_b2: "B2 — выше среднего",
+        ai_studio_type: "Что создать?", ai_type_lessons: "Урок", ai_type_stories: "История", ai_type_vocab: "Словарь",
+        ai_studio_topic: "Тема", ai_topic_placeholder: "Например: путешествия", ai_topic_general: "общая практика",
+        ai_studio_level: "Уровень", ai_generate: "Сгенерировать", ai_generating: "Генерирую контент…",
+        ai_diag_required: "Ответь на все вопросы диагностики.", ai_preview_title: "Предпросмотр JSON",
+        ai_preview_hint: "Проверь материал перед добавлением в курс.", ai_import: "Добавить в курс",
+        ai_back: "Назад", ai_close: "Закрыть", ai_generated: "Контент сгенерирован. Проверь JSON.",
+        ai_imported: "Добавлено: уроков {lessons}, историй {stories}, слов {vocab}.", ai_invalid_json: "Ответ не является валидным JSON.",
+        ai_invalid_schema: "JSON не соответствует схеме.", ai_empty_response: "Пустой ответ.", ai_need_key: "Сначала добавь Gemini API-ключ.",
+        ai_open_key: "Открыть настройки ключа", ai_model: "Модель: {model}", ai_weak_areas: "Слабые места: {areas}",
+        ai_validation: "Проверяю JSON…", ai_key_hint: "Ключ хранится только в этом браузере."
+      },
+      en: {
+        gemini_checking: "Checking key and models…", gemini_connected_model: "Connected · {model}",
+        gemini_error_400: "Invalid Gemini API key.", gemini_error_403: "Gemini access is restricted (region or key).",
+        gemini_error_429: "Gemini rate limit exceeded. Try again later.", gemini_error_timeout: "Gemini did not respond in time.",
+        gemini_error_network: "No network or Gemini is unavailable.", gemini_error_missing_key: "Add a Gemini API key in settings first.",
+        gemini_error_models: "Could not load the Gemini model list.", gemini_error_generic: "Gemini error. Please try again.",
+        gemini_error_parse: "Could not parse the Gemini response.", gemini_error_empty: "Gemini returned an empty response.",
+        gemini_error_validation: "JSON did not pass validation.",
+        ai_explain: "✨ AI explain", ai_analysis_title: "AI explain", ai_analysis_loading: "Analysing the phrase…",
+        ai_analysis_empty: "No text selected.", ai_analysis_need_key: "Add a Gemini API key in settings to use AI explain.",
+        ai_analysis_close: "Close", ai_analysis_context: "Context",
+        ai_studio_title: "AI Studio", ai_studio_open: "Open AI Studio", ai_studio_kicker: "AI STUDIO / GENERATOR", ai_explain_kicker: "GEMINI / EXPLAIN", ai_studio_hint_badge: "GEMINI / JSON",
+        ai_studio_hint: "Generate lessons, stories and vocabulary from a weak-spot diagnosis.",
+        ai_studio_diag_title: "Micro-diagnostics", ai_studio_diag_hint: "Answer 4 questions — AI will adapt the material.",
+        ai_diag_skill: "What feels hardest?", ai_diag_grammar: "Which grammar topic?",
+        ai_diag_practice: "Which practice format?", ai_diag_level: "Which level?",
+        ai_skill_grammar: "Grammar", ai_skill_vocab: "Vocabulary", ai_skill_reading: "Reading", ai_skill_writing: "Writing",
+        ai_grammar_tenses: "Tenses", ai_grammar_articles: "Articles", ai_grammar_prepositions: "Prepositions", ai_grammar_word_order: "Word order",
+        ai_practice_reading: "Reading", ai_practice_writing: "Writing", ai_practice_quiz: "Quiz", ai_practice_dialogue: "Dialogue",
+        ai_level_a1: "A1 — beginner", ai_level_a2: "A2 — elementary", ai_level_b1: "B1 — intermediate", ai_level_b2: "B2 — upper intermediate",
+        ai_studio_type: "What to create?", ai_type_lessons: "Lesson", ai_type_stories: "Story", ai_type_vocab: "Vocabulary",
+        ai_studio_topic: "Topic", ai_topic_placeholder: "For example: travel", ai_topic_general: "general practice",
+        ai_studio_level: "Level", ai_generate: "Generate", ai_generating: "Generating content…",
+        ai_diag_required: "Answer all diagnostic questions.", ai_preview_title: "JSON preview",
+        ai_preview_hint: "Review the material before adding it to the course.", ai_import: "Add to course",
+        ai_back: "Back", ai_close: "Close", ai_generated: "Content generated. Review the JSON.",
+        ai_imported: "Added: {lessons} lessons, {stories} stories, {vocab} words.", ai_invalid_json: "The response is not valid JSON.",
+        ai_invalid_schema: "JSON does not match the schema.", ai_empty_response: "Empty response.", ai_need_key: "Add a Gemini API key first.",
+        ai_open_key: "Open key settings", ai_model: "Model: {model}", ai_weak_areas: "Weak spots: {areas}",
+        ai_validation: "Validating JSON…", ai_key_hint: "The key is stored only in this browser."
+      },
+      da: {
+        gemini_checking: "Tjekker nøgle og modeller…", gemini_connected_model: "Forbundet · {model}",
+        gemini_error_400: "Ugyldig Gemini API-nøgle.", gemini_error_403: "Gemini-adgang er begrænset (region eller nøgle).",
+        gemini_error_429: "Gemini-grænsen er nået. Prøv igen senere.", gemini_error_timeout: "Gemini svarede ikke i tide.",
+        gemini_error_network: "Ingen netværk eller Gemini er utilgængelig.", gemini_error_missing_key: "Tilføj en Gemini API-nøgle i indstillingerne først.",
+        gemini_error_models: "Kunne ikke hente Gemini-modellisten.", gemini_error_generic: "Gemini-fejl. Prøv igen.",
+        gemini_error_parse: "Gemini-svaret kunne ikke læses.", gemini_error_empty: "Gemini returnerede et tomt svar.",
+        gemini_error_validation: "JSON bestod ikke valideringen.",
+        ai_explain: "✨ AI-forklaring", ai_analysis_title: "AI-forklaring", ai_analysis_loading: "Analyserer sætningen…",
+        ai_analysis_empty: "Ingen tekst valgt.", ai_analysis_need_key: "Tilføj en Gemini API-nøgle i indstillingerne for at bruge AI-forklaring.",
+        ai_analysis_close: "Luk", ai_analysis_context: "Kontekst",
+        ai_studio_title: "AI Studio", ai_studio_open: "Åbn AI Studio", ai_studio_kicker: "AI STUDIO / GENERATOR", ai_explain_kicker: "GEMINI / FORKLARING", ai_studio_hint_badge: "GEMINI / JSON",
+        ai_studio_hint: "Generér lektioner, historier og ord ud fra en svaghedsdiagnose.",
+        ai_studio_diag_title: "Mikrodiagnose", ai_studio_diag_hint: "Svar på 4 spørgsmål — AI tilpasser materialet.",
+        ai_diag_skill: "Hvad er sværest?", ai_diag_grammar: "Hvilket grammatikemne?",
+        ai_diag_practice: "Hvilken øvelsesform?", ai_diag_level: "Hvilket niveau?",
+        ai_skill_grammar: "Grammatik", ai_skill_vocab: "Ordforråd", ai_skill_reading: "Læsning", ai_skill_writing: "Skrivning",
+        ai_grammar_tenses: "Tider", ai_grammar_articles: "Artikler", ai_grammar_prepositions: "Præpositioner", ai_grammar_word_order: "Ordstilling",
+        ai_practice_reading: "Læsning", ai_practice_writing: "Skrivning", ai_practice_quiz: "Quiz", ai_practice_dialogue: "Dialog",
+        ai_level_a1: "A1 — begynder", ai_level_a2: "A2 — elementær", ai_level_b1: "B1 — mellem", ai_level_b2: "B2 — øvre mellem",
+        ai_studio_type: "Hvad skal der laves?", ai_type_lessons: "Lektion", ai_type_stories: "Historie", ai_type_vocab: "Ordforråd",
+        ai_studio_topic: "Emne", ai_topic_placeholder: "For eksempel: rejser", ai_topic_general: "generel øvelse",
+        ai_studio_level: "Niveau", ai_generate: "Generér", ai_generating: "Genererer indhold…",
+        ai_diag_required: "Svar på alle diagnosespørgsmål.", ai_preview_title: "JSON-forhåndsvisning",
+        ai_preview_hint: "Gennemse materialet, før det føjes til kurset.", ai_import: "Føj til kurset",
+        ai_back: "Tilbage", ai_close: "Luk", ai_generated: "Indhold genereret. Gennemse JSON.",
+        ai_imported: "Tilføjet: {lessons} lektioner, {stories} historier, {vocab} ord.", ai_invalid_json: "Svaret er ikke gyldig JSON.",
+        ai_invalid_schema: "JSON matcher ikke skemaet.", ai_empty_response: "Tomt svar.", ai_need_key: "Tilføj en Gemini API-nøgle først.",
+        ai_open_key: "Åbn nøgleindstillinger", ai_model: "Model: {model}", ai_weak_areas: "Svagheder: {areas}",
+        ai_validation: "Validerer JSON…", ai_key_hint: "Nøglen gemmes kun i denne browser."
+      },
+      tr: {
+        gemini_checking: "Anahtar ve modeller kontrol ediliyor…", gemini_connected_model: "Bağlandı · {model}",
+        gemini_error_400: "Geçersiz Gemini API anahtarı.", gemini_error_403: "Gemini erişimi kısıtlı (bölge veya anahtar).",
+        gemini_error_429: "Gemini istek sınırı aşıldı. Daha sonra dene.", gemini_error_timeout: "Gemini zamanında yanıt vermedi.",
+        gemini_error_network: "Ağ yok veya Gemini kullanılamıyor.", gemini_error_missing_key: "Önce ayarlardan Gemini API anahtarı ekle.",
+        gemini_error_models: "Gemini model listesi alınamadı.", gemini_error_generic: "Gemini hatası. Tekrar dene.",
+        gemini_error_parse: "Gemini yanıtı ayrıştırılamadı.", gemini_error_empty: "Gemini boş yanıt döndürdü.",
+        gemini_error_validation: "JSON doğrulamadan geçmedi.",
+        ai_explain: "✨ AI açıklaması", ai_analysis_title: "AI açıklaması", ai_analysis_loading: "İfade analiz ediliyor…",
+        ai_analysis_empty: "Seçili metin yok.", ai_analysis_need_key: "AI açıklaması için ayarlardan Gemini API anahtarı ekle.",
+        ai_analysis_close: "Kapat", ai_analysis_context: "Bağlam",
+        ai_studio_title: "AI Studio", ai_studio_open: "AI Studio'yu aç", ai_studio_kicker: "AI STUDIO / ÜRETİCİ", ai_explain_kicker: "GEMINI / AÇIKLAMA", ai_studio_hint_badge: "GEMINI / JSON",
+        ai_studio_hint: "Zayıf nokta teşhisine göre ders, hikâye ve kelime üret.",
+        ai_studio_diag_title: "Mikro teşhis", ai_studio_diag_hint: "4 soruyu yanıtla — AI materyali uyarlasın.",
+        ai_diag_skill: "En zor gelen ne?", ai_diag_grammar: "Hangi dil bilgisi konusu?",
+        ai_diag_practice: "Hangi pratik biçimi?", ai_diag_level: "Hangi seviye?",
+        ai_skill_grammar: "Dil bilgisi", ai_skill_vocab: "Kelime", ai_skill_reading: "Okuma", ai_skill_writing: "Yazma",
+        ai_grammar_tenses: "Zamanlar", ai_grammar_articles: "Artikeller", ai_grammar_prepositions: "Edatlar", ai_grammar_word_order: "Kelime sırası",
+        ai_practice_reading: "Okuma", ai_practice_writing: "Yazma", ai_practice_quiz: "Test", ai_practice_dialogue: "Diyalog",
+        ai_level_a1: "A1 — başlangıç", ai_level_a2: "A2 — temel", ai_level_b1: "B1 — orta", ai_level_b2: "B2 — orta üstü",
+        ai_studio_type: "Ne oluşturulsun?", ai_type_lessons: "Ders", ai_type_stories: "Hikâye", ai_type_vocab: "Kelime",
+        ai_studio_topic: "Konu", ai_topic_placeholder: "Örneğin: seyahat", ai_topic_general: "genel pratik",
+        ai_studio_level: "Seviye", ai_generate: "Üret", ai_generating: "İçerik üretiliyor…",
+        ai_diag_required: "Tüm teşhis sorularını yanıtla.", ai_preview_title: "JSON önizleme",
+        ai_preview_hint: "Materyali kursa eklemeden önce incele.", ai_import: "Kursa ekle",
+        ai_back: "Geri", ai_close: "Kapat", ai_generated: "İçerik üretildi. JSON'u incele.",
+        ai_imported: "Eklendi: {lessons} ders, {stories} hikâye, {vocab} kelime.", ai_invalid_json: "Yanıt geçerli JSON değil.",
+        ai_invalid_schema: "JSON şemaya uymuyor.", ai_empty_response: "Boş yanıt.", ai_need_key: "Önce Gemini API anahtarı ekle.",
+        ai_open_key: "Anahtar ayarlarını aç", ai_model: "Model: {model}", ai_weak_areas: "Zayıf noktalar: {areas}",
+        ai_validation: "JSON doğrulanıyor…", ai_key_hint: "Anahtar yalnızca bu tarayıcıda saklanır."
+      }
+    };
+    Object.entries(C2_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
       Object.assign(UI_TRANSLATIONS[language], dictionary);
     });
 
