@@ -118,7 +118,7 @@
         const keys = [];
         for (let index = 0; index < window.localStorage.length; index += 1) {
           const key = window.localStorage.key(index);
-          if (!key || keepExact.has(key) || contentPattern.test(key)) continue;
+          if (!key || keepExact.has(key) || contentPattern.test(key) || key.startsWith(AI_CHATS_STORAGE_PREFIX)) continue;
           if (key.startsWith("lingua_")) keys.push(key);
         }
         keys.forEach((key) => window.localStorage.removeItem(key));

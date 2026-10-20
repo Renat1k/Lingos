@@ -1,4 +1,4 @@
-# LINGUA/OS — архитектура (v2.6)
+# LINGUA/OS — архитектура (v2.13)
 
 Статическое приложение без сборщика: классические `<script>`, общий global scope, `"use strict"` в каждом файле.
 
@@ -15,7 +15,8 @@
 | `js/helpers.js` | Общие утилиты и форматирование | `escapeHtml`, `icon`, `showToast`, `languageLabel` | `dom` |
 | `js/sync.js` | Supabase sync по `user_id`, merge, статусы | `ensureSupabaseClient`, `pullCloudData`, `pushCloudData` | `config`, `state`, `dom` |
 | `js/auth.js` | Supabase Auth, Google GIS, профиль | `signInWithPassword`, `signInWithIdToken`, `applyAuthUser` | `state`, `dom`, `sync` |
-| `js/ai-studio.js` | Локальный Gemini API key и проверка | `saveGeminiKey`, `testGeminiKey` | `config`, `dom` |
+| `js/ai-providers.js` | Единый слой ИИ-провайдеров: адаптеры Gemini/OpenAI-compatible/Anthropic, цепочка моделей, retry, cooling, настройки провайдеров | `generateAiText`, `runProvider`, `listProviderModels`, `testProviderSlot`, `initAiProviderSettings` | `config`, `state`, `dom`, `helpers` |
+| `js/ai-studio.js` | AI Studio, курс/чаты, ИИ-Разбор, Gemini-совместимые обёртки | `generateGeminiText`, `generateGeminiOnce`, `runAiAnalysis`, `beginAiGeneration`, `saveGeminiKey`, `testGeminiKey` | `config`, `state`, `dom`, `helpers`, `ai-providers` |
 | `js/ui-settings.js` | Настройки, темы, переводы, reset | `openSettings`, `applySettings`, `resetAllProgress` | `config`, `state`, `dom`, `auth` |
 | `js/vocab.js` | Vocabulary Vault, теги, редактор, экспорт | `renderVocabularyHub`, `openWordEditor`, `downloadVocabulary` | `state`, `dom`, `helpers` |
 | `js/stories.js` | Истории, чтение, панель перевода | `renderStoriesHub`, `renderStory`, `openTranslation` | `state`, `dom`, `helpers` |
@@ -26,7 +27,7 @@
 
 ## Порядок подключения
 
-`config → data-default → state → dom → helpers → sync → auth → ai-studio → ui-settings → vocab → stories → lessons → import → app`
+`config → data-default → state → dom → helpers → sync → auth → ai-providers → ai-studio → ui-settings → vocab → stories → lessons → import → app`
 
 `app.js` всегда последний: в нём статические listeners и `boot()`.
 
@@ -35,9 +36,23 @@
 - Новые константы и переводы — в `config.js`; новые дефолтные данные — в `data-default.js`.
 - Чтение/запись localStorage и настройки — в `state.js`.
 - DOM-ссылки — только в `dom.js`; общие утилиты — в `helpers.js`.
-- Сетевые интеграции: Supabase — `sync.js`, Google — `auth.js`, Gemini — `ai-studio.js`.
+- Сетевые интеграции: Supabase — `sync.js`, Google — `auth.js`, ИИ-провайдеры — `ai-providers.js`. `ai-studio.js` использует `generateAiText()` и держит только UI/чат/валидацию.
 - Схема Supabase (`user_id`, RLS, backfill) — только `sql/migration.sql`, вручную.
 - Новый экран/домен — отдельный `js/<domain>.js`; подключать перед `app.js`.
 - Не обращаться к `const`/`let` нижнего файла во время загрузки: только внутри функций после `boot()`.
 - Не добавлять `import/export`, `type="module"` или сборщик.
 - `index.monolith.html` — резервная копия v2.4; не изменять без подтверждения.
+
+## ИИ-провайдеры (v2.13)
+
+- `generateAiText(prompt, options)` — единая точка генерации для AI Studio и ИИ-Разбора.
+- Порядок маршрута: основной провайдер → резервный (если настроен).
+- Gemini: выбранная модель → стабильная модель предыдущего поколения → lite → остальные; не более 3 моделей за запрос.
+- На 429/500/503/сетевой сбой — до 3 попыток с экспоненциальной паузой и jitter. 429 с `Retry-After`/`retryDelay` > 30 с и дневная квота не повторяются.
+- Ошибки 429/500/503 помечают модель «остывающей» на 4 минуты в памяти.
+- OpenAI-compatible: `Authorization: Bearer`, `POST {baseUrl}/chat/completions`, `GET {baseUrl}/models`; JSON-режим `response_format` опционален, при 400 выполняется повтор без него; `max_tokens`/`max_completion_tokens` — с fallback при 400.
+- Anthropic: `POST /v1/messages`, `x-api-key`, `anthropic-version: 2023-06-01`, `anthropic-dangerous-direct-browser-access: true`; JSON-режима нет, используется системный промт.
+- Конфигурация провайдеров: `lingua_ai_provider_*` в localStorage; ключи и baseUrl не попадают в Supabase (`collectCloudPayload`/`applyCloudPayload`).
+- Ключи не пишутся в URL, console, чаты и тексты ошибок; технические детали редактируются.
+- CORS/сетевой отказ браузера распознаётся как отдельный класс ошибки с подсказкой сменить провайдера.
+

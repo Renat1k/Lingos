@@ -61,6 +61,8 @@ Rules:
     let aiSelectionState = null;
     let aiSelectionTimer = null;
     let aiLastAnalysis = null;
+    let aiAnalysisAbort = null;
+    let aiAnalysisLastResult = null;
     const aiAnalyzeButton = document.getElementById("aiAnalyzeBtn");
 
     /* ---------- Gemini transport, models and errors ---------- */
@@ -85,6 +87,7 @@ Rules:
 
     function geminiErrorTechnical(error) {
       if (!error) return "";
+      if (error.aiCode && typeof aiErrorTechnical === "function") return aiErrorTechnical(error);
       const parts = [];
       if (error.geminiModel) parts.push(error.geminiModel);
       if (error.geminiFallbackFrom) parts.push(`${error.geminiFallbackFrom} → ${error.geminiModel || ""}`);
@@ -97,6 +100,7 @@ Rules:
 
     function geminiErrorMessage(error) {
       if (!error) return t("gemini_error_generic");
+      if (error.aiCode && typeof aiErrorMessage === "function") return aiErrorMessage(error);
       const message = String(geminiApiMessage(error)).toLowerCase();
       if (error.geminiCode === "missing") return t("gemini_error_missing_key");
       if (error.geminiCode === "models") return t("gemini_error_models");
@@ -175,12 +179,26 @@ Rules:
     }
 
     async function geminiRequest(path, options = {}) {
-      const key = getGeminiKey();
+      const key = options.key || getGeminiKey();
       if (!key) throw geminiError("missing");
+      const base = options.baseUrl || GEMINI_API_BASE;
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), Number(options.timeout) || 30000);
+      let timedOut = false;
+      let externallyAborted = false;
+      const timer = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, Number(options.timeout) || 30000);
+      const externalAbort = () => {
+        externallyAborted = true;
+        controller.abort();
+      };
+      if (options.signal) {
+        if (options.signal.aborted) controller.abort();
+        else options.signal.addEventListener("abort", externalAbort, { once: true });
+      }
       try {
-        const response = await fetch(`${GEMINI_API_BASE}${path}`, {
+        const response = await fetch(`${base}${path}`, {
           method: options.method || "GET",
           headers: {
             "Content-Type": "application/json",
@@ -217,12 +235,54 @@ Rules:
           throw geminiError("parse");
         }
       } catch (error) {
+        if (externallyAborted) {
+          const aborted = new Error("aborted");
+          aborted.name = "AbortError";
+          aborted.aiCode = "aborted";
+          throw aborted;
+        }
         if (error.geminiCode) throw error;
-        if (error.name === "AbortError") throw geminiError("timeout", null, { geminiModel: options.model || "" });
+        if (error.name === "AbortError") {
+          if (timedOut) throw geminiError("timeout", null, { geminiModel: options.model || "" });
+          const aborted = new Error("aborted");
+          aborted.name = "AbortError";
+          aborted.aiCode = "aborted";
+          throw aborted;
+        }
         throw geminiError("network", null, { geminiModel: options.model || "" });
       } finally {
         window.clearTimeout(timer);
+        options.signal?.removeEventListener("abort", externalAbort);
       }
+    }
+
+    async function generateGeminiOnce(prompt, options = {}) {
+      const model = String(options.model || "").replace(/^models\//, "").trim();
+      if (!model) throw geminiError("models");
+      const cap = modelOutputCap(model);
+      const requestedMax = Math.max(1, Number(options.maxOutputTokens) || 4096);
+      const maxOutputTokens = Math.min(requestedMax, cap || requestedMax);
+      const body = {
+        contents: [{ role: "user", parts: [{ text: String(prompt || "") }] }],
+        generationConfig: {
+          temperature: Number.isFinite(options.temperature) ? options.temperature : 0.6,
+          maxOutputTokens
+        }
+      };
+      if (options.json) body.generationConfig.responseMimeType = "application/json";
+      if (options.system) body.systemInstruction = { parts: [{ text: options.system }] };
+      const data = await geminiRequest(`/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        body,
+        model,
+        key: options.key,
+        baseUrl: options.baseUrl,
+        signal: options.signal,
+        timeout: options.timeout || 60000
+      });
+      const info = responseInfo(data);
+      if (!info.text) throw emptyResponseError(info, model, maxOutputTokens);
+      return { text: info.text, finishReason: info.finishReason, model };
     }
 
     function modelInfo(raw) {
@@ -294,6 +354,35 @@ Rules:
       const index = ordered.findIndex((model) => model.name === requestedName);
       const after = index >= 0 ? ordered.slice(index + 1) : ordered;
       return after.find((model) => model.name !== requestedName) || null;
+    }
+
+    function geminiCandidateModels(preferredName, limit = 3) {
+      const models = Array.isArray(geminiModelsCache) ? geminiModelsCache : [];
+      if (!models.length) return [];
+      const requested = models.find((model) => model.name === preferredName)
+        || models.find((model) => model.name === savedGeminiModel())
+        || selectedGeminiModel()
+        || models[0];
+      if (!requested) return [];
+      const used = new Set();
+      const stable = models.filter((model) => model.stable && model.name !== requested.name);
+      const previousVersion = stable
+        .filter((model) => model.version && requested.version && model.version < requested.version)
+        .reduce((max, model) => Math.max(max, model.version), 0);
+      const previousGeneration = stable
+        .filter((model) => model.version === previousVersion && !model.lite)
+        .sort((a, b) => Number(b.flash) - Number(a.flash) || a.name.localeCompare(b.name));
+      const lite = models
+        .filter((model) => model.lite && model.name !== requested.name)
+        .sort((a, b) => Number(b.stable) - Number(a.stable) || modelVersionScore(b) - modelVersionScore(a));
+      const rest = sortedGeminiModels()
+        .filter((model) => model.name !== requested.name && !previousGeneration.some((item) => item.name === model.name) && !lite.some((item) => item.name === model.name));
+      const ordered = [requested, ...previousGeneration, ...lite, ...rest];
+      return ordered.filter((model) => {
+        if (used.has(model.name)) return false;
+        used.add(model.name);
+        return true;
+      }).slice(0, Math.max(1, limit));
     }
 
     function modelBadge(labelKey, className) {
@@ -637,20 +726,77 @@ Rules:
       if (retry) retry.hidden = !showRetry;
     }
 
+    function setAiAnalysisMeta(text, showMakePrimary = false) {
+      const meta = document.getElementById("aiAnalysisMeta");
+      const make = document.getElementById("aiAnalysisMakePrimary");
+      if (meta) {
+        meta.textContent = text || "";
+        meta.hidden = !text;
+      }
+      if (make) make.hidden = !showMakePrimary;
+    }
+
+    function setAiAnalysisBusy(busy) {
+      const cancel = document.getElementById("aiAnalysisCancel");
+      if (cancel) cancel.hidden = !busy;
+      const retry = document.getElementById("aiAnalysisRetry");
+      if (retry && busy) retry.hidden = true;
+    }
+
+    function formatAiRetryText(payload) {
+      return t("ai_retry_message", {
+        provider: aiProviderLabel(payload.provider),
+        model: payload.model || "",
+        reason: t(payload.reason || "ai_retry_overload"),
+        attempt: payload.attempt,
+        max: payload.max,
+        seconds: Math.max(1, Math.ceil(Number(payload.delayMs || 0) / 1000))
+      });
+    }
+
     async function runAiAnalysis(text, context) {
       openAiAnalysisSheet();
-      if (!getGeminiKey()) {
-        setAiAnalysisContent(t("ai_analysis_need_key"), true, false);
+      if (!hasConfiguredAiProvider()) {
+        setAiAnalysisContent(t("ai_error_missing_key"), true, false);
+        setAiAnalysisMeta("", false);
         return;
       }
       setAiAnalysisContent(t("ai_analysis_loading"));
+      setAiAnalysisMeta("", false);
+      setAiAnalysisBusy(true);
+      const controller = new AbortController();
+      aiAnalysisAbort = controller;
       const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
       const prompt = `Разобрать фразу '${text}' из контекста '${context}'. Дай пословный перевод, грамматический разбор и объяснение идиом. Отвечай строго на языке UI: '${uiLanguage}'.`;
       try {
-        const answer = await generateGeminiText(prompt, { temperature: 0.25, maxOutputTokens: 4096 });
-        setAiAnalysisContent(answer);
+        const result = await generateAiText(prompt, {
+          temperature: 0.25,
+          maxOutputTokens: 4096,
+          signal: controller.signal,
+          onRetry: (payload) => {
+            setAiAnalysisContent(formatAiRetryText(payload));
+          }
+        });
+        aiAnalysisLastResult = result;
+        setAiAnalysisContent(result.text);
+        setAiAnalysisMeta(t("ai_analysis_meta", {
+          provider: aiProviderLabel(result.provider),
+          model: result.model
+        }), Boolean(result.fallback));
       } catch (error) {
-        setAiAnalysisContent(geminiErrorDisplay(error), true, true);
+        if (error?.aiCode === "aborted" || error?.name === "AbortError") {
+          setAiAnalysisContent(t("ai_analysis_cancelled"));
+          setAiAnalysisMeta("", false);
+        } else {
+          setAiAnalysisContent(geminiErrorDisplay(error), true, true);
+          setAiAnalysisMeta(t("ai_analysis_provider", {
+            provider: aiProviderLabel(error.aiProvider),
+            model: error.aiModel || ""
+          }), false);
+        }
+      } finally {
+        if (aiAnalysisAbort === controller) aiAnalysisAbort = null;
+        setAiAnalysisBusy(false);
       }
     }
 
@@ -673,9 +819,18 @@ Rules:
     ];
 
     let aiChatState = null;
+    let aiChatAbort = null;
+    let aiChatLastResult = null;
+    let aiStudioCourse = null;
+    let aiChatStore = null;
+    let aiChatRenamingId = null;
+    let aiChatPanelOpen = false;
+    let aiChatStorageWarned = false;
 
     function createAiChatState() {
       return {
+        chatId: null,
+        course: null,
         mode: null,
         type: null,
         question: null,
@@ -692,6 +847,455 @@ Rules:
         customPrompt: "",
         imported: false
       };
+    }
+
+    function aiCourseLabel(code) {
+      return languageLabel(code);
+    }
+
+    function aiCourseFlag(code) {
+      return renderFlag(code);
+    }
+
+    function ensureAiStudioCourse(notify = true) {
+      const active = activeLanguageCodes();
+      if (!active.length) {
+        aiStudioCourse = null;
+        return false;
+      }
+      if (!aiStudioCourse || !active.includes(aiStudioCourse)) {
+        const previous = aiStudioCourse;
+        const fallback = active.includes(currentLanguage()) ? currentLanguage() : active[0];
+        aiStudioCourse = fallback;
+        if (previous && notify) showToast(t("ai_course_missing", { course: aiCourseLabel(previous) }), "info");
+      }
+      return true;
+    }
+
+    function closeAiCourseMenu() {
+      const menu = document.getElementById("aiCourseMenu");
+      const trigger = document.getElementById("aiCourseTrigger");
+      if (menu) menu.hidden = true;
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    }
+
+    function renderAiCourseSelector() {
+      const trigger = document.getElementById("aiCourseTrigger");
+      const name = document.getElementById("aiCourseName");
+      const flag = document.getElementById("aiCourseFlag");
+      const menu = document.getElementById("aiCourseMenu");
+      if (!trigger || !name || !flag || !menu) return;
+      const active = activeLanguageCodes();
+      menu.textContent = "";
+      if (!aiStudioCourse || !active.includes(aiStudioCourse)) {
+        name.textContent = t("ai_course_no_active");
+        flag.textContent = "";
+        trigger.disabled = true;
+        closeAiCourseMenu();
+        return;
+      }
+      trigger.disabled = false;
+      name.textContent = aiCourseLabel(aiStudioCourse);
+      flag.innerHTML = aiCourseFlag(aiStudioCourse);
+      active.forEach((code) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = `ai-course-option${code === aiStudioCourse ? " is-selected" : ""}`;
+        option.dataset.aiCourse = code;
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(code === aiStudioCourse));
+        const optionFlag = document.createElement("span");
+        optionFlag.className = "ai-course-option-flag";
+        optionFlag.setAttribute("aria-hidden", "true");
+        optionFlag.innerHTML = aiCourseFlag(code);
+        const optionName = document.createElement("span");
+        optionName.textContent = aiCourseLabel(code);
+        const optionCode = document.createElement("span");
+        optionCode.className = "ai-course-option-code";
+        optionCode.textContent = String(code).toUpperCase();
+        option.append(optionFlag, optionName, optionCode);
+        menu.appendChild(option);
+      });
+    }
+
+    function aiChatStorageKey(course) {
+      return `${AI_CHATS_STORAGE_PREFIX}${course}`;
+    }
+
+    function warnAiChatStorage() {
+      if (aiChatStorageWarned) return;
+      aiChatStorageWarned = true;
+      showToast(t("ai_chat_storage_error"), "error");
+    }
+
+    function normalizeStoredAiChat(raw, course) {
+      if (!raw || typeof raw !== "object" || !raw.id) return null;
+      const messages = (Array.isArray(raw.messages) ? raw.messages : [])
+        .filter((message) => message && (message.role === "user" || message.role === "assistant"))
+        .map((message) => ({
+          role: message.role,
+          text: typeof message.text === "string" ? message.text.slice(0, 8000) : "",
+          kind: typeof message.kind === "string" ? message.kind : "",
+          preview: message.preview && typeof message.preview === "object" ? message.preview : null,
+          at: message.at || raw.updatedAt || new Date().toISOString()
+        }))
+        .slice(-AI_CHAT_MAX_MESSAGES);
+      return {
+        id: String(raw.id),
+        title: typeof raw.title === "string" ? raw.title.slice(0, 80) : "",
+        course,
+        createdAt: raw.createdAt || new Date().toISOString(),
+        updatedAt: raw.updatedAt || raw.createdAt || new Date().toISOString(),
+        messages
+      };
+    }
+
+    function loadAiChatStore(course) {
+      const empty = { version: 1, activeId: null, chats: [] };
+      if (!course) return empty;
+      try {
+        const raw = window.localStorage.getItem(aiChatStorageKey(course));
+        if (!raw) return empty;
+        const parsed = JSON.parse(raw);
+        const chats = (Array.isArray(parsed?.chats) ? parsed.chats : [])
+          .map((chat) => normalizeStoredAiChat(chat, course))
+          .filter(Boolean)
+          .slice(0, AI_CHAT_MAX_PER_COURSE);
+        return {
+          version: 1,
+          activeId: chats.some((chat) => chat.id === parsed?.activeId) ? parsed.activeId : (chats[0]?.id || null),
+          chats
+        };
+      } catch (error) {
+        warnAiChatStorage();
+        return empty;
+      }
+    }
+
+    function saveAiChatStore() {
+      if (!aiChatStore || !aiStudioCourse) return false;
+      try {
+        window.localStorage.setItem(aiChatStorageKey(aiStudioCourse), JSON.stringify(aiChatStore));
+        return true;
+      } catch (error) {
+        warnAiChatStorage();
+        return false;
+      }
+    }
+
+    function currentAiChatRecord() {
+      if (!aiChatStore || !aiChatState?.chatId) return null;
+      return aiChatStore.chats.find((chat) => chat.id === aiChatState.chatId) || null;
+    }
+
+    function makeAiChatTitle(text) {
+      const clean = String(text || "").replace(/\s+/g, " ").trim();
+      if (!clean) return t("ai_chat_untitled");
+      return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean;
+    }
+
+    function createAiChatRecord() {
+      if (!aiChatStore || !aiStudioCourse) return null;
+      if (aiChatStore.chats.length >= AI_CHAT_MAX_PER_COURSE) {
+        showToast(t("ai_chat_chat_limit"), "info");
+        return null;
+      }
+      const now = new Date().toISOString();
+      const chat = {
+        id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        title: "",
+        course: aiStudioCourse,
+        createdAt: now,
+        updatedAt: now,
+        messages: []
+      };
+      aiChatStore.chats.unshift(chat);
+      aiChatStore.activeId = chat.id;
+      saveAiChatStore();
+      return chat;
+    }
+
+    function recordAiChatMessage(role, text, options = {}) {
+      if (!aiChatState) return false;
+      if (options.kind === "status" || options.persist === false) return true;
+      let chat = currentAiChatRecord();
+      if (!chat) {
+        if (role !== "user") return true;
+        chat = createAiChatRecord();
+        if (!chat) return false;
+        aiChatState.chatId = chat.id;
+      }
+      const cleanText = String(text || "").slice(0, 8000);
+      if (role === "user" && !chat.title) chat.title = makeAiChatTitle(cleanText);
+      const message = {
+        role,
+        text: cleanText,
+        kind: options.kind || "",
+        at: new Date().toISOString()
+      };
+      if (options.preview) message.preview = options.preview;
+      if (chat.messages.length >= AI_CHAT_MAX_MESSAGES) {
+        chat.messages.shift();
+        if (!chat.limitWarned) {
+          chat.limitWarned = true;
+          showToast(t("ai_chat_message_limit"), "info");
+        }
+      }
+      chat.messages.push(message);
+      chat.updatedAt = message.at;
+      if (chat.messages.length >= AI_CHAT_MAX_MESSAGES && !chat.limitWarned) {
+        chat.limitWarned = true;
+        showToast(t("ai_chat_message_limit"), "info");
+      }
+      saveAiChatStore();
+      renderAiChatList();
+      return true;
+    }
+
+    function renderAiChatList() {
+      const list = document.getElementById("aiChatList");
+      if (!list) return;
+      list.textContent = "";
+      if (!aiChatStore || !aiChatStore.chats.length) {
+        const empty = document.createElement("p");
+        empty.className = "ai-chat-list-empty";
+        empty.textContent = t("ai_chats_empty");
+        list.appendChild(empty);
+        return;
+      }
+      aiChatStore.chats.forEach((chat) => {
+        const item = document.createElement("div");
+        item.className = `ai-chat-list-item${chat.id === aiChatState?.chatId ? " is-active" : ""}`;
+        item.dataset.aiChatId = chat.id;
+        if (aiChatRenamingId === chat.id) {
+          const input = document.createElement("input");
+          input.className = "ai-chat-rename-input";
+          input.type = "text";
+          input.maxLength = 60;
+          input.value = chat.title || "";
+          input.placeholder = t("ai_chat_rename_placeholder");
+          input.dataset.aiChatRenameInput = chat.id;
+          const actions = document.createElement("div");
+          actions.className = "ai-chat-rename-actions";
+          const save = document.createElement("button");
+          save.type = "button";
+          save.className = "ai-chat-mini-btn";
+          save.dataset.aiChatRenameSave = chat.id;
+          save.textContent = "✓";
+          save.setAttribute("aria-label", t("ai_chat_save"));
+          const cancel = document.createElement("button");
+          cancel.type = "button";
+          cancel.className = "ai-chat-mini-btn";
+          cancel.dataset.aiChatRenameCancel = chat.id;
+          cancel.textContent = "✕";
+          cancel.setAttribute("aria-label", t("ai_chat_cancel"));
+          actions.append(save, cancel);
+          item.append(input, actions);
+        } else {
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "ai-chat-list-open";
+          open.dataset.aiChatOpen = chat.id;
+          const title = document.createElement("span");
+          title.className = "ai-chat-list-title";
+          title.textContent = chat.title || t("ai_chat_untitled");
+          const meta = document.createElement("span");
+          meta.className = "ai-chat-list-meta";
+          const date = new Date(chat.updatedAt);
+          const dateText = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(state.settings.uiLanguage || "ru");
+          meta.textContent = [aiCourseLabel(chat.course), dateText].filter(Boolean).join(" · ");
+          open.append(title, meta);
+          const actions = document.createElement("div");
+          actions.className = "ai-chat-list-actions";
+          const rename = document.createElement("button");
+          rename.type = "button";
+          rename.className = "ai-chat-mini-btn";
+          rename.dataset.aiChatRename = chat.id;
+          rename.textContent = "✎";
+          rename.setAttribute("aria-label", t("ai_chat_rename"));
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "ai-chat-mini-btn";
+          remove.dataset.aiChatDelete = chat.id;
+          remove.textContent = "×";
+          remove.setAttribute("aria-label", t("ai_chat_delete"));
+          actions.append(rename, remove);
+          item.append(open, actions);
+        }
+        list.appendChild(item);
+      });
+    }
+
+    function renderAiChatWelcome() {
+      appendAiChatMessage("assistant", t("ai_chat_welcome"), {
+        persist: false,
+        chips: [
+          { label: t("ai_chat_lesson"), action: "type", value: "lessons" },
+          { label: t("ai_chat_story"), action: "type", value: "stories" },
+          { label: t("ai_chat_vocab"), action: "type", value: "vocab" },
+          { label: t("ai_chat_auto"), action: "auto" },
+          { label: t("ai_chat_custom"), action: "custom" },
+          { label: t("ai_chat_json"), action: "json" }
+        ]
+      });
+      appendAiChatMessage("assistant", t("ai_chat_welcome_hint"), {
+        persist: false,
+        chips: [{ label: t("ai_chat_diagnose"), action: "diagnose" }]
+      });
+    }
+
+    function appendStoredAiPreview(message) {
+      const preview = message.preview || {};
+      const text = `${t("ai_chat_preview")} · ${preview.title || t("ai_chat_untitled")}`;
+      appendAiChatMessage("assistant", text, { persist: false, kind: "preview-summary" });
+    }
+
+    function openAiChatRecord(chat) {
+      if (!chat) {
+        resetAiChat();
+        renderAiChatList();
+        return;
+      }
+      if (aiChatStore) {
+        aiChatStore.activeId = chat.id;
+        saveAiChatStore();
+      }
+      aiChatState = createAiChatState();
+      aiChatState.chatId = chat.id;
+      aiChatState.course = chat.course || aiStudioCourse;
+      const log = aiChatLogElement();
+      if (log) log.textContent = "";
+      if (!chat.messages.length) {
+        renderAiChatWelcome();
+      } else {
+        chat.messages.forEach((message) => {
+          if (message.kind === "preview") {
+            appendStoredAiPreview(message);
+          } else {
+            appendAiChatMessage(message.role, message.text, {
+              persist: false,
+              kind: message.kind || undefined
+            });
+          }
+        });
+      }
+      setChatBusy(false);
+      setAiChatHint("ai_chat_hint");
+      renderAiChatList();
+    }
+
+    function loadAiStudioChats() {
+      if (!ensureAiStudioCourse(false)) {
+        aiChatStore = { version: 1, activeId: null, chats: [] };
+        resetAiChat();
+        renderAiChatList();
+        renderAiCourseSelector();
+        return;
+      }
+      aiChatStore = loadAiChatStore(aiStudioCourse);
+      const active = aiChatStore.chats.find((chat) => chat.id === aiChatStore.activeId) || aiChatStore.chats[0] || null;
+      if (active) {
+        openAiChatRecord(active);
+      } else {
+        resetAiChat();
+      }
+      renderAiChatList();
+      renderAiCourseSelector();
+    }
+
+    function switchAiStudioCourse(code) {
+      if (!code || code === aiStudioCourse || aiChatState?.busy) return;
+      const active = activeLanguageCodes();
+      if (!active.includes(code)) {
+        showToast(t("ai_course_missing", { course: aiCourseLabel(code) }), "info");
+        renderAiCourseSelector();
+        return;
+      }
+      if (aiChatStore && aiChatState?.chatId) aiChatStore.activeId = aiChatState.chatId;
+      saveAiChatStore();
+      aiStudioCourse = code;
+      closeAiCourseMenu();
+      loadAiStudioChats();
+      aiChatPanelOpen = false;
+      const sidebar = document.getElementById("aiChatSidebar");
+      if (sidebar) sidebar.classList.remove("is-open");
+    }
+
+    function startNewAiChat() {
+      if (aiChatState?.busy) return;
+      if (!ensureAiStudioCourse(false)) {
+        showToast(t("ai_course_no_active"), "info");
+        return;
+      }
+      if (!aiChatStore || aiChatStore.chats.length >= AI_CHAT_MAX_PER_COURSE) {
+        showToast(t("ai_chat_chat_limit"), "info");
+        return;
+      }
+      const chat = createAiChatRecord();
+      if (!chat) return;
+      openAiChatRecord(chat);
+      aiChatPanelOpen = false;
+      document.getElementById("aiChatSidebar")?.classList.remove("is-open");
+    }
+
+    function saveAiChatTitle(id, value) {
+      if (!aiChatStore) return;
+      const chat = aiChatStore.chats.find((item) => item.id === id);
+      if (!chat) return;
+      const title = String(value || "").replace(/\s+/g, " ").trim().slice(0, 60);
+      if (title) chat.title = title;
+      chat.updatedAt = new Date().toISOString();
+      aiChatRenamingId = null;
+      saveAiChatStore();
+      renderAiChatList();
+    }
+
+    function deleteAiChat(id) {
+      if (!aiChatStore || aiChatState?.busy) return;
+      const index = aiChatStore.chats.findIndex((chat) => chat.id === id);
+      if (index < 0) return;
+      const chat = aiChatStore.chats[index];
+      const finish = () => {
+        aiChatStore.chats.splice(index, 1);
+        if (aiChatStore.activeId === id) {
+          const next = aiChatStore.chats[Math.min(index, aiChatStore.chats.length - 1)] || aiChatStore.chats[index - 1] || null;
+          aiChatStore.activeId = next?.id || null;
+          if (next) openAiChatRecord(next);
+          else resetAiChat();
+        }
+        saveAiChatStore();
+        renderAiChatList();
+      };
+      if (typeof requestConfirmation === "function") {
+        void requestConfirmation({
+          title: t("ai_chat_delete_title"),
+          message: t("ai_chat_delete_message", { title: chat.title || t("ai_chat_untitled") }),
+          confirmLabel: t("ai_chat_delete")
+        }).then((confirmed) => { if (confirmed) finish(); });
+      }
+    }
+
+    function deleteAllAiChats() {
+      if (!aiChatStore || !aiStudioCourse || aiChatState?.busy) return;
+      const finish = () => {
+        aiChatStore.chats = [];
+        aiChatStore.activeId = null;
+        saveAiChatStore();
+        resetAiChat();
+        renderAiChatList();
+      };
+      if (typeof requestConfirmation === "function") {
+        void requestConfirmation({
+          title: t("ai_chats_delete_all_title"),
+          message: t("ai_chats_delete_all_message", { course: aiCourseLabel(aiStudioCourse) }),
+          confirmLabel: t("ai_chats_delete_all")
+        }).then((confirmed) => { if (confirmed) finish(); });
+      }
+    }
+
+    function toggleAiChatPanel() {
+      aiChatPanelOpen = !aiChatPanelOpen;
+      document.getElementById("aiChatSidebar")?.classList.toggle("is-open", aiChatPanelOpen);
     }
 
     function aiChatLogElement() {
@@ -741,6 +1345,8 @@ Rules:
       if (options.actions) appendAiChatActions(bubble, options.actions);
       log.appendChild(row);
       scrollAiChat();
+      const recorded = recordAiChatMessage(role, text, options);
+      if (role === "user" && options.persist !== false && !recorded) return null;
       return { row, bubble };
     }
 
@@ -780,7 +1386,7 @@ Rules:
       if (input) input.disabled = Boolean(busy);
       if (send) send.disabled = Boolean(busy);
       if (newChat) newChat.disabled = Boolean(busy);
-      const shell = document.querySelector(".ai-chat-shell");
+      const shell = document.querySelector(".ai-chat-main");
       if (shell) shell.classList.toggle("is-busy", Boolean(busy));
     }
 
@@ -794,13 +1400,14 @@ Rules:
     function syncAiChatViewport() {
       const modal = document.getElementById("aiStudioModal");
       const panel = document.querySelector(".ai-studio-panel");
-      const shell = document.querySelector(".ai-chat-shell");
+      const shell = document.querySelector(".ai-chat-main");
       if (!modal?.open || !panel || !shell) return;
       const viewport = window.visualViewport;
       if (viewport) {
         const panelHeight = Math.min(680, Math.max(340, Math.round(viewport.height - 20)));
+        const headerHeight = document.querySelector(".ai-studio-head")?.offsetHeight || 82;
         panel.style.maxHeight = `${panelHeight}px`;
-        shell.style.height = `${Math.max(260, panelHeight - 82)}px`;
+        shell.style.height = `${Math.max(240, panelHeight - headerHeight - 2)}px`;
       }
       scrollAiChat();
     }
@@ -829,6 +1436,7 @@ Rules:
     function resetAiChat() {
       if (aiChatState?.busy) return;
       aiChatState = createAiChatState();
+      aiChatState.course = aiStudioCourse;
       const log = aiChatLogElement();
       if (log) log.textContent = "";
       setChatBusy(false);
@@ -840,23 +1448,13 @@ Rules:
         input.focus();
       }
       autoGrowChatInput();
-      appendAiChatMessage("assistant", t("ai_chat_welcome"), {
-        chips: [
-          { label: t("ai_chat_lesson"), action: "type", value: "lessons" },
-          { label: t("ai_chat_story"), action: "type", value: "stories" },
-          { label: t("ai_chat_vocab"), action: "type", value: "vocab" },
-          { label: t("ai_chat_auto"), action: "auto" },
-          { label: t("ai_chat_custom"), action: "custom" },
-          { label: t("ai_chat_json"), action: "json" }
-        ]
-      });
-      appendAiChatMessage("assistant", t("ai_chat_welcome_hint"), {
-        chips: [{ label: t("ai_chat_diagnose"), action: "diagnose" }]
-      });
+      renderAiChatWelcome();
+      renderAiChatList();
     }
 
     function startAiType(type) {
       if (!aiChatState || aiChatState.busy) return;
+      if (!appendAiChatMessage("user", aiTypeLabel(type))) return;
       aiChatState.mode = type;
       aiChatState.type = type;
       aiChatState.answers = {};
@@ -864,7 +1462,6 @@ Rules:
       aiChatState.blocksDecided = false;
       aiChatState.question = "topic";
       aiChatState.diagnostics = aiChatState.diagnostics || null;
-      appendAiChatMessage("user", aiTypeLabel(type));
       appendAiChatMessage("assistant", t("ai_chat_topic_question"), {
         chips: [{ label: t("ai_skip"), action: "skip" }]
       });
@@ -1133,18 +1730,28 @@ Rules:
       document.getElementById("aiChatInput")?.focus();
     }
 
+    function aiCourseSystemPrompt() {
+      const course = aiChatState?.course || aiStudioCourse;
+      const label = course ? aiCourseLabel(course) : "English";
+      const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
+      return `${GEMINI_SYSTEM_PROMPT}\nTarget learning language: ${label} (${course || "en"}).\nUI language for explanations: ${uiLanguage}.`;
+    }
+
     function buildAiPrompt(options = {}) {
       if (!aiChatState) return "";
       if (options.custom) return String(options.custom);
       const type = options.type || aiChatState.type || "lessons";
       const answers = aiChatState.answers;
+      const course = aiChatState.course || aiStudioCourse;
+      const courseLabel = aiCourseLabel(course);
       const blocks = aiChatState.blocks.length ? aiChatState.blocks.join(", ") : "AI decides";
       const weak = aiChatState.diagnostics
         ? Object.values(aiChatState.diagnostics).map((key) => t(key)).join(", ")
         : "";
       const lines = [
-        `Create ${type} for the active learning language.`,
-        `UI language: ${UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский"}.`,
+        `Create ${type} for the target learning language.`,
+        `Learning language: ${courseLabel} (${course || "en"}).`,
+        `UI language for explanations: ${UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский"}.`,
         `Topic: ${answers.topic || t("ai_topic_general")}.`,
         `Target level: ${answers.level || "B1"}.`
       ];
@@ -1160,8 +1767,20 @@ Rules:
 
     async function beginAiGeneration(options = {}) {
       if (!aiChatState || aiChatState.busy) return;
-      if (!getGeminiKey()) {
-        appendAiChatMessage("assistant", t("ai_chat_no_key"), {
+      if (!ensureAiStudioCourse(false)) {
+        appendAiChatMessage("assistant", t("ai_course_no_active"));
+        return;
+      }
+      if (aiChatState.course && !activeLanguageCodes().includes(aiChatState.course)) {
+        renderAiCourseSelector();
+        appendAiChatMessage("assistant", t("ai_course_missing", { course: aiCourseLabel(aiChatState.course) }), {
+          actions: [{ label: t("ai_chat_action_refine"), action: "course" }]
+        });
+        return;
+      }
+      if (aiChatState.course !== aiStudioCourse) aiChatState.course = aiStudioCourse;
+      if (!hasConfiguredAiProvider()) {
+        appendAiChatMessage("assistant", t("ai_error_missing_key"), {
           actions: [
             { label: t("ai_chat_action_key"), action: "key" },
             { label: t("ai_chat_action_change_model"), action: "change-model" }
@@ -1177,44 +1796,79 @@ Rules:
       aiChatState.refining = false;
       setChatBusy(true);
       setAiChatHint("ai_chat_generating");
-      appendAiChatStatus(t("ai_chat_status_key"));
+      const status = appendAiChatStatus(t("ai_chat_status_key"));
+      const controller = new AbortController();
+      aiChatAbort = controller;
+      let retryMessage = null;
+      const setRetryText = (payload) => {
+        const text = formatAiRetryText(payload);
+        if (!retryMessage) {
+          retryMessage = appendAiChatMessage("assistant", text, { kind: "status", persist: false });
+          if (retryMessage) {
+            appendAiChatActions(retryMessage.bubble, [{ label: t("ai_retry_cancel"), action: "cancel" }]);
+          }
+        } else {
+          retryMessage.bubble.textContent = text;
+          appendAiChatActions(retryMessage.bubble, [{ label: t("ai_retry_cancel"), action: "cancel" }]);
+        }
+        scrollAiChat();
+      };
       try {
-        await ensureGeminiModels();
-        const selected = selectedGeminiModel();
-        if (!selected) throw geminiError("models");
-        appendAiChatStatus(t("ai_chat_status_model", { model: selected.name }));
-        appendAiChatStatus(t("ai_chat_generating"));
-        const text = await generateGeminiText(prompt, {
-          system: GEMINI_SYSTEM_PROMPT,
+        const result = await generateAiText(prompt, {
+          system: aiCourseSystemPrompt(),
           json: true,
           temperature: 0.65,
-          maxOutputTokens: 16384
+          maxOutputTokens: 16384,
+          signal: controller.signal,
+          onStatus: ({ provider, model }) => {
+            if (provider && model) status.set(t("ai_chat_status_provider", { provider: aiProviderLabel(provider), model }));
+          },
+          onRetry: setRetryText
         });
-        if (geminiLastActualModel && geminiLastActualModel !== selected.name) {
-          appendAiChatStatus(t("ai_chat_status_model", { model: geminiLastActualModel }));
+        aiChatLastResult = result;
+        retryMessage?.bubble.querySelector(".ai-chat-actions")?.remove();
+        if (result.provider === "gemini") {
+          geminiLastActualModel = result.model;
+          geminiLastFallback = result.fallback ? { requested: result.fallback.fromModel, actual: result.model } : null;
         }
+        status.set(t("ai_chat_status_provider", { provider: aiProviderLabel(result.provider), model: result.model }));
         appendAiChatStatus(t("ai_chat_validating"));
-        const raw = parseGeminiJson(text);
+        const raw = parseGeminiJson(result.text);
         const actualType = detectPayloadType(raw) || type;
         const payload = validateGeneratedPayload(raw, actualType);
         aiChatState.type = actualType;
         aiChatState.generated = { payload, type: actualType, imported: false };
+        if (result.fallback) {
+          const fallbackText = result.fallback.fromProvider === result.provider
+            ? t("ai_provider_answered", { provider: aiProviderLabel(result.provider), model: result.model })
+            : t("ai_provider_fallback", { provider: aiProviderLabel(result.provider), model: result.model });
+          appendAiChatMessage("assistant", fallbackText, {
+            actions: [{ label: t("ai_provider_make_primary"), action: "make-primary" }]
+          });
+        }
         const done = appendAiChatStatus(t("ai_chat_done"));
         done.done(t("ai_chat_done"));
         appendAiPreviewCard(payload, actualType);
       } catch (error) {
-        const failedText = `${t("ai_chat_error")} · ${geminiErrorMessage(error)}`;
-        const failed = appendAiChatStatus(failedText);
-        failed.fail(failedText);
-        appendAiChatMessage("assistant", geminiErrorDisplay(error), {
-          actions: [
-            { label: t("ai_chat_action_retry"), action: "retry" },
-            { label: t("ai_chat_action_simplify"), action: "simplify" },
-            { label: t("ai_chat_action_change_model"), action: "change-model" },
-            { label: t("ai_chat_action_key"), action: "key" }
-          ]
-        });
+        retryMessage?.bubble.querySelector(".ai-chat-actions")?.remove();
+        if (error?.aiCode === "aborted" || error?.name === "AbortError") {
+          status.fail(t("ai_chat_cancelled"));
+          appendAiChatMessage("assistant", t("ai_chat_cancelled"));
+        } else {
+          const failedText = `${t("ai_chat_error")} · ${geminiErrorMessage(error)}`;
+          const failed = appendAiChatStatus(failedText);
+          failed.fail(failedText);
+          appendAiChatMessage("assistant", geminiErrorDisplay(error), {
+            actions: [
+              { label: t("ai_chat_action_retry"), action: "retry" },
+              { label: t("ai_chat_action_simplify"), action: "simplify" },
+              { label: t("ai_chat_action_change_model"), action: "change-model" },
+              { label: t("ai_chat_action_key"), action: "key" }
+            ]
+          });
+        }
       } finally {
+        if (aiChatAbort === controller) aiChatAbort = null;
         setChatBusy(false);
         setAiChatHint("ai_chat_hint");
       }
@@ -1271,6 +1925,21 @@ Rules:
       bubble.appendChild(actions);
       row.appendChild(bubble);
       log.appendChild(row);
+      const previewBlocks = type === "lessons" ? (Array.isArray(first.blocks) ? first.blocks.length : 0) : 0;
+      const previewQuestions = type === "lessons"
+        ? (Array.isArray(first.blocks) ? first.blocks : []).filter((block) => block.type === "quiz").reduce((sum, block) => sum + (Array.isArray(block.questions) ? block.questions.length : 0), 0)
+        : 0;
+      recordAiChatMessage("assistant", t("ai_chat_preview"), {
+        kind: "preview",
+        preview: {
+          type,
+          title: first.title || first.word || t("ai_chat_preview"),
+          level: first.level || "",
+          items: items.length,
+          blocks: previewBlocks,
+          questions: previewQuestions
+        }
+      });
       scrollAiChat();
     }
 
@@ -1398,7 +2067,25 @@ Rules:
 
     function importAiPreview() {
       if (!aiChatState?.generated || aiChatState.generated.imported) return;
+      const targetCourse = aiChatState.course || aiStudioCourse;
+      if (!targetCourse || !activeLanguageCodes().includes(targetCourse)) {
+        renderAiCourseSelector();
+        appendAiChatMessage("assistant", t("ai_course_missing", { course: aiCourseLabel(targetCourse) }), {
+          actions: [{ label: t("ai_chat_action_refine"), action: "course" }]
+        });
+        return;
+      }
+      const originalLanguage = state.language;
+      const originalSettingsLanguage = state.settings.language;
+      const originalSearch = state.vocabSearch;
+      const originalTag = state.vocabTag;
+      let switched = false;
       try {
+        if (targetCourse !== originalLanguage) {
+          activateLanguageData(targetCourse);
+          state.settings.language = targetCourse;
+          switched = true;
+        }
         const result = importPayload(aiChatState.generated.payload);
         aiChatState.generated.imported = true;
         const message = t("ai_imported", {
@@ -1406,13 +2093,20 @@ Rules:
           stories: result.storiesAdded + result.storiesUpdated,
           vocab: result.vocabAdded + result.vocabUpdated
         });
-        appendAiChatMessage("assistant", message);
-        if (typeof rerenderCurrentView === "function") rerenderCurrentView();
-        showToast(t("ai_chat_imported"), "success");
+        appendAiChatMessage("assistant", `${message} · ${t("ai_chat_imported_course", { course: aiCourseLabel(targetCourse) })}`);
+        if (targetCourse === originalLanguage && typeof rerenderCurrentView === "function") rerenderCurrentView();
+        showToast(t("ai_chat_imported_course", { course: aiCourseLabel(targetCourse) }), "success");
       } catch (error) {
         appendAiChatMessage("assistant", geminiErrorDisplay(error), {
           actions: [{ label: t("ai_chat_action_refine"), action: "refine" }]
         });
+      } finally {
+        if (switched || state.language !== originalLanguage) {
+          activateLanguageData(originalLanguage);
+          state.settings.language = originalSettingsLanguage;
+          state.vocabSearch = originalSearch;
+          state.vocabTag = originalTag;
+        }
       }
     }
 
@@ -1424,12 +2118,26 @@ Rules:
 
     function handleAiChatAction(action, value) {
       if (!aiChatState) return;
+      if (action === "cancel") {
+        aiChatAbort?.abort();
+        return;
+      }
+      if (action === "make-primary") {
+        if (aiChatLastResult) {
+          makeProviderResult(aiChatLastResult);
+          appendAiChatMessage("assistant", t("ai_make_primary_done", {
+            provider: aiProviderLabel(aiChatLastResult.provider),
+            model: aiChatLastResult.model
+          }));
+        }
+        return;
+      }
       if (action === "type") return startAiType(value);
       if (action === "auto") {
         aiChatState.mode = "lessons";
         aiChatState.type = "lessons";
         aiChatState.answers = { topic: t("ai_chat_auto"), level: "B1" };
-        appendAiChatMessage("user", t("ai_chat_auto"));
+        if (!appendAiChatMessage("user", t("ai_chat_auto"))) return;
         void beginAiGeneration();
         return;
       }
@@ -1474,6 +2182,16 @@ Rules:
       if (action === "refine") return aiChatState.generated ? startAiRefine() : startAiJsonMode();
       if (action === "add") return importAiPreview();
       if (action === "change-model" || action === "key") return openAiStudioSettings();
+      if (action === "course") {
+        const trigger = document.getElementById("aiCourseTrigger");
+        const menu = document.getElementById("aiCourseMenu");
+        if (menu && trigger) {
+          menu.hidden = false;
+          trigger.setAttribute("aria-expanded", "true");
+          menu.querySelector("[data-ai-course]")?.focus();
+        }
+        return;
+      }
       if (action === "simplify") {
         const text = t("ai_chat_action_simplify");
         appendAiChatMessage("user", text);
@@ -1483,13 +2201,17 @@ Rules:
 
     function handleAiChatSend() {
       if (!aiChatState || aiChatState.busy) return;
+      if (!ensureAiStudioCourse(false)) {
+        appendAiChatMessage("assistant", t("ai_course_no_active"), { persist: false });
+        return;
+      }
       const input = document.getElementById("aiChatInput");
       if (!input) return;
       const text = input.value.trim();
       if (!text) return;
       input.value = "";
       autoGrowChatInput();
-      appendAiChatMessage("user", text);
+      if (!appendAiChatMessage("user", text)) return;
       if (aiChatState.mode === "json" || aiChatState.question === "json") return startAiJson(text);
       if (aiChatState.refining || aiChatState.question === "refine") return void refineAiResult(text);
       const looksLikePrompt = text.length > 90 || /(сделай|создай|сгенерируй|напиши|make|create|generate)/i.test(text);
@@ -1506,7 +2228,12 @@ Rules:
     function openAiStudio() {
       const modal = document.getElementById("aiStudioModal");
       if (!modal) return;
-      if (!aiChatState) resetAiChat();
+      ensureAiStudioCourse(true);
+      if (!aiChatState || aiChatState.course !== aiStudioCourse) loadAiStudioChats();
+      else {
+        renderAiCourseSelector();
+        renderAiChatList();
+      }
       if (typeof modal.showModal === "function") modal.showModal();
       else modal.setAttribute("open", "");
       syncAiChatViewport();
@@ -1611,6 +2338,16 @@ Rules:
     document.getElementById("aiAnalysisRetry")?.addEventListener("click", () => {
       if (aiLastAnalysis) void runAiAnalysis(aiLastAnalysis.text, aiLastAnalysis.context);
     });
+    document.getElementById("aiAnalysisCancel")?.addEventListener("click", () => aiAnalysisAbort?.abort());
+    document.getElementById("aiAnalysisMakePrimary")?.addEventListener("click", () => {
+      if (aiAnalysisLastResult) {
+        makeProviderResult(aiAnalysisLastResult);
+        setAiAnalysisMeta(t("ai_make_primary_done", {
+          provider: aiProviderLabel(aiAnalysisLastResult.provider),
+          model: aiAnalysisLastResult.model
+        }), false);
+      }
+    });
     document.getElementById("aiAnalysisModal")?.addEventListener("click", (event) => {
       if (event.target.id === "aiAnalysisModal") closeAiAnalysisSheet();
     });
@@ -1660,7 +2397,79 @@ Rules:
     document.getElementById("aiStudioModal")?.addEventListener("click", (event) => {
       if (event.target.id === "aiStudioModal") closeAiStudio();
     });
-    document.getElementById("aiChatNew")?.addEventListener("click", resetAiChat);
+    document.getElementById("aiChatNew")?.addEventListener("click", startNewAiChat);
+    document.getElementById("aiChatSidebarNew")?.addEventListener("click", startNewAiChat);
+    document.getElementById("aiChatPanelToggle")?.addEventListener("click", toggleAiChatPanel);
+    document.getElementById("aiChatDeleteAll")?.addEventListener("click", deleteAllAiChats);
+    document.getElementById("aiCourseTrigger")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      const menu = document.getElementById("aiCourseMenu");
+      const trigger = event.currentTarget;
+      if (!menu || trigger.disabled) return;
+      const open = menu.hidden;
+      menu.hidden = !open;
+      trigger.setAttribute("aria-expanded", String(open));
+      if (open) menu.querySelector("[data-ai-course]")?.focus();
+    });
+    document.getElementById("aiCourseMenu")?.addEventListener("click", (event) => {
+      const option = event.target.closest("[data-ai-course]");
+      if (!option) return;
+      event.preventDefault();
+      switchAiStudioCourse(option.dataset.aiCourse);
+    });
+    document.getElementById("aiCourseMenu")?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAiCourseMenu();
+        document.getElementById("aiCourseTrigger")?.focus();
+      }
+    });
+    document.getElementById("aiChatList")?.addEventListener("click", (event) => {
+      const open = event.target.closest("[data-ai-chat-open]");
+      if (open) {
+        if (aiChatState?.busy) return;
+        const chat = aiChatStore?.chats.find((item) => item.id === open.dataset.aiChatOpen);
+        if (chat) {
+          openAiChatRecord(chat);
+          aiChatPanelOpen = false;
+          document.getElementById("aiChatSidebar")?.classList.remove("is-open");
+        }
+        return;
+      }
+      const rename = event.target.closest("[data-ai-chat-rename]");
+      if (rename) {
+        aiChatRenamingId = rename.dataset.aiChatRename;
+        renderAiChatList();
+        document.querySelector(`[data-ai-chat-rename-input="${CSS.escape(aiChatRenamingId)}"]`)?.focus();
+        return;
+      }
+      const save = event.target.closest("[data-ai-chat-rename-save]");
+      if (save) {
+        const input = document.querySelector(`[data-ai-chat-rename-input="${CSS.escape(save.dataset.aiChatRenameSave)}"]`);
+        saveAiChatTitle(save.dataset.aiChatRenameSave, input?.value || "");
+        return;
+      }
+      const cancel = event.target.closest("[data-ai-chat-rename-cancel]");
+      if (cancel) {
+        aiChatRenamingId = null;
+        renderAiChatList();
+        return;
+      }
+      const remove = event.target.closest("[data-ai-chat-delete]");
+      if (remove) deleteAiChat(remove.dataset.aiChatDelete);
+    });
+    document.getElementById("aiChatList")?.addEventListener("keydown", (event) => {
+      const input = event.target.closest("[data-ai-chat-rename-input]");
+      if (!input) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveAiChatTitle(input.dataset.aiChatRenameInput, input.value);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        aiChatRenamingId = null;
+        renderAiChatList();
+      }
+    });
     document.getElementById("aiChatSend")?.addEventListener("click", handleAiChatSend);
     document.getElementById("aiChatInput")?.addEventListener("input", autoGrowChatInput);
     document.getElementById("aiChatInput")?.addEventListener("keydown", (event) => {
@@ -1671,6 +2480,12 @@ Rules:
     });
     document.getElementById("aiChatLog")?.addEventListener("click", (event) => {
       if (!aiChatState) return;
+      const earlyAction = event.target.closest("[data-ai-action]");
+      if (earlyAction?.dataset.aiAction === "cancel") {
+        event.preventDefault();
+        aiChatAbort?.abort();
+        return;
+      }
       if (aiChatState.busy) return;
       const levelOption = event.target.closest("[data-ai-level]");
       if (levelOption) {
@@ -1725,8 +2540,20 @@ Rules:
         document.querySelectorAll(".ai-chat-select-menu").forEach((node) => { node.hidden = true; });
         document.querySelectorAll("[data-ai-select-toggle]").forEach((node) => node.setAttribute("aria-expanded", "false"));
       }
+      if (!event.target.closest(".ai-course-select")) closeAiCourseMenu();
+      if (aiChatPanelOpen && !event.target.closest("#aiChatSidebar") && !event.target.closest("#aiChatPanelToggle")) {
+        aiChatPanelOpen = false;
+        document.getElementById("aiChatSidebar")?.classList.remove("is-open");
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !document.getElementById("aiCourseMenu")?.hidden) {
+        event.preventDefault();
+        closeAiCourseMenu();
+      }
     });
     window.visualViewport?.addEventListener("resize", syncAiChatViewport);
     window.addEventListener("resize", syncAiChatViewport);
 
     if (!getGeminiKey()) setGeminiModelStatus(t("gemini_error_missing_key"), true);
+    if (typeof initAiProviderSettings === "function") initAiProviderSettings();

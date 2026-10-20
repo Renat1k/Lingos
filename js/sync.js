@@ -134,7 +134,7 @@
       try {
         for (let index = 0; index < window.localStorage.length; index += 1) {
           const key = window.localStorage.key(index);
-          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith("lingua_cloud_")) continue;
+          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX) || key.startsWith("lingua_cloud_")) continue;
           const raw = window.localStorage.getItem(key);
           if (raw == null) continue;
           try {
@@ -259,7 +259,7 @@
         }
         Object.entries(payload.values).forEach(([key, value]) => {
           if (key === DELETED_KEY) return;
-          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE) return;
+          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX)) return;
           let nextValue = value;
           if (key === UI_SETTINGS_KEY) {
             nextValue = mergeSettingsValue(readJSON(key, null), value);

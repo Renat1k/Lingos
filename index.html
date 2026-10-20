@@ -11,7 +11,7 @@
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <link rel="stylesheet" href="css/style.css?v=2.11" />
+  <link rel="stylesheet" href="css/style.css?v=2.13" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -361,6 +361,17 @@
               <button class="btn btn-quiet" id="geminiMakePrimary" type="button" data-i18n="gemini_make_primary">Сделать основной</button>
             </div>
           </div>
+        </section>
+
+        <section class="settings-section" data-settings-group="system" aria-labelledby="aiProviderSettingLabel">
+          <div class="settings-section-head">
+            <span id="aiProviderSettingLabel" data-i18n="ai_provider_title">ИИ-провайдер</span>
+            <span class="settings-hint">MULTI / API</span>
+          </div>
+          <p class="settings-help" data-i18n="ai_provider_hint">Основной и резервный сервис для генерации и ИИ-Разбора.</p>
+          <div class="ai-provider-cards" id="aiProviderCards"></div>
+          <p class="settings-help ai-provider-key-note" data-i18n="ai_provider_key_note">Ключ хранится только в этом браузере и не отправляется в облако.</p>
+          <p class="ai-provider-global-status" id="aiProviderGlobalStatus" aria-live="polite"></p>
         </section>
 
         <section class="settings-section" data-settings-group="system" aria-labelledby="aiStudioSettingLabel">
@@ -730,8 +741,11 @@
         </button>
       </header>
       <div class="ai-analysis-body" id="aiAnalysisBody" aria-live="polite"></div>
+      <p class="ai-analysis-meta" id="aiAnalysisMeta" hidden></p>
       <div class="ai-analysis-actions">
         <button class="btn btn-secondary" id="aiAnalysisRetry" type="button" data-i18n="gemini_retry" hidden>Повторить</button>
+        <button class="btn btn-quiet" id="aiAnalysisMakePrimary" type="button" data-i18n="ai_provider_make_primary" hidden>Сделать основной</button>
+        <button class="btn btn-danger" id="aiAnalysisCancel" type="button" data-i18n="ai_analysis_cancel" hidden>Отмена</button>
       </div>
     </div>
   </dialog>
@@ -739,11 +753,20 @@
   <dialog class="ai-studio-modal" id="aiStudioModal" aria-labelledby="aiStudioTitle">
     <div class="ai-studio-panel">
       <header class="ai-studio-head">
-        <div>
+        <div class="ai-studio-title-wrap">
           <span class="settings-kicker"><i aria-hidden="true"></i> <span data-i18n="ai_chat_kicker">AI-МЕТОДИСТ / ЧАТ</span></span>
           <h2 id="aiStudioTitle" data-i18n="ai_studio_title">AI Studio</h2>
+          <div class="ai-course-select" id="aiCourseSelect">
+            <button class="ai-course-trigger" id="aiCourseTrigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria="ai_course_label" aria-label="Курс">
+              <span class="ai-course-flag" id="aiCourseFlag" aria-hidden="true"></span>
+              <span id="aiCourseName">—</span>
+              <span class="ai-chat-select-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <div class="ai-course-menu" id="aiCourseMenu" role="listbox" hidden></div>
+          </div>
         </div>
         <div class="ai-studio-head-actions">
+          <button class="ai-chat-panel-toggle" id="aiChatPanelToggle" type="button" data-i18n="ai_chats_title">Чаты</button>
           <button class="btn btn-quiet ai-chat-new" id="aiChatNew" type="button" data-i18n="ai_chat_new">Новый чат</button>
           <button class="icon-btn" id="aiStudioClose" type="button" data-i18n-aria="ai_close" aria-label="Закрыть">
             <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
@@ -751,13 +774,24 @@
         </div>
       </header>
 
-      <div class="ai-chat-shell">
-        <div class="ai-chat-log" id="aiChatLog" aria-live="polite"></div>
-        <div class="ai-chat-composer">
-          <div class="ai-chat-hint" id="aiChatHint" data-i18n="ai_chat_hint">Enter — отправить · Shift+Enter — новая строка</div>
-          <div class="ai-chat-composer-row">
-            <textarea id="aiChatInput" rows="1" data-i18n-placeholder="ai_chat_placeholder" aria-label="Напиши запрос…" data-i18n-aria="ai_chat_placeholder" placeholder="Напиши запрос…"></textarea>
-            <button class="btn btn-primary ai-chat-send" id="aiChatSend" type="button" data-i18n="ai_chat_send">Отправить</button>
+      <div class="ai-chat-layout">
+        <aside class="ai-chat-sidebar" id="aiChatSidebar">
+          <div class="ai-chat-sidebar-head">
+            <span data-i18n="ai_chats_title">Чаты</span>
+            <button class="ai-chat-sidebar-new" id="aiChatSidebarNew" type="button" data-i18n="ai_chat_new">Новый чат</button>
+          </div>
+          <div class="ai-chat-list" id="aiChatList"></div>
+          <button class="ai-chat-delete-all" id="aiChatDeleteAll" type="button" data-i18n="ai_chats_delete_all">Удалить все чаты курса</button>
+        </aside>
+
+        <div class="ai-chat-main">
+          <div class="ai-chat-log" id="aiChatLog" aria-live="polite"></div>
+          <div class="ai-chat-composer">
+            <div class="ai-chat-hint" id="aiChatHint" data-i18n="ai_chat_hint">Enter — отправить · Shift+Enter — новая строка</div>
+            <div class="ai-chat-composer-row">
+              <textarea id="aiChatInput" rows="1" data-i18n-placeholder="ai_chat_placeholder" aria-label="Напиши запрос…" data-i18n-aria="ai_chat_placeholder" placeholder="Напиши запрос…"></textarea>
+              <button class="btn btn-primary ai-chat-send" id="aiChatSend" type="button" data-i18n="ai_chat_send">Отправить</button>
+            </div>
           </div>
         </div>
       </div>
@@ -766,19 +800,20 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.11"></script>
-  <script src="js/data-default.js?v=2.11"></script>
-  <script src="js/state.js?v=2.11"></script>
-  <script src="js/dom.js?v=2.11"></script>
-  <script src="js/helpers.js?v=2.11"></script>
-  <script src="js/sync.js?v=2.11"></script>
-  <script src="js/auth.js?v=2.11"></script>
-  <script src="js/ai-studio.js?v=2.11"></script>
-  <script src="js/ui-settings.js?v=2.11"></script>
-  <script src="js/vocab.js?v=2.11"></script>
-  <script src="js/stories.js?v=2.11"></script>
-  <script src="js/lessons.js?v=2.11"></script>
-  <script src="js/import.js?v=2.11"></script>
-  <script src="js/app.js?v=2.11"></script>
+  <script src="js/config.js?v=2.13"></script>
+  <script src="js/data-default.js?v=2.13"></script>
+  <script src="js/state.js?v=2.13"></script>
+  <script src="js/dom.js?v=2.13"></script>
+  <script src="js/helpers.js?v=2.13"></script>
+  <script src="js/sync.js?v=2.13"></script>
+  <script src="js/auth.js?v=2.13"></script>
+  <script src="js/ai-providers.js?v=2.13"></script>
+  <script src="js/ai-studio.js?v=2.13"></script>
+  <script src="js/ui-settings.js?v=2.13"></script>
+  <script src="js/vocab.js?v=2.13"></script>
+  <script src="js/stories.js?v=2.13"></script>
+  <script src="js/lessons.js?v=2.13"></script>
+  <script src="js/import.js?v=2.13"></script>
+  <script src="js/app.js?v=2.13"></script>
 </body>
 </html>
