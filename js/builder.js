@@ -938,22 +938,14 @@
       const contentLanguage = builderAiContentLanguageName();
       const uiLanguage = builderAiUiLanguageName();
       const schema = mode === "block"
-        ? `For a single block return only: {"block": ${builderAiBlockSchema(type)}}`
-        : 'For the whole lesson return only: {"lesson": {"title":"...","level":"A1","subtitle":"...","blocks":[...]},"changes":["short change description in the UI language"]}';
-      return [
-        "You are the LINGUA/OS lesson builder AI co-author.",
-        `Target learning language: ${contentLanguage} (${state.language}).`,
-        `UI and explanation language: ${uiLanguage}.`,
-        `All generated learning content must be in ${contentLanguage}. All explanations, chat replies and change descriptions must be in ${uiLanguage}.`,
-        "Return ONLY one valid JSON object. No markdown fences, no prose, no comments.",
-        schema,
-        "Keep the requested block type unchanged in block mode.",
-        "Do not add ids to lessons, blocks, participants or messages unless the schema explicitly needs participant ids for message.from/viewer.",
-        "Preserve existing metadata (id, title, locked, updated_at, created_at, is_hidden); never invent or overwrite it.",
-        "Set each block type, nav_label and eyebrow so the lesson card gets the correct derived tags.",
-        "Do not add scripts, event handlers, iframes or dangerous HTML. Reading text may contain safe HTML only.",
-        retry ? "Your previous response could not be parsed or validated. Return ONLY valid JSON that exactly matches the schema." : ""
-      ].filter(Boolean).join("\n");
+        ? `{"block": ${builderAiBlockSchema(type)}}`
+        : '{"lesson": {"title":"...","level":"A1","subtitle":"...","blocks":[...]},"changes":["short change description in the UI language"]}';
+      return APP_PROMPTS.BUILDER_COAUTHOR_PROMPT
+        .replaceAll("{{contentLanguage}}", contentLanguage)
+        .replaceAll("{{code}}", state.language)
+        .replaceAll("{{uiLanguage}}", uiLanguage)
+        .replaceAll("{{schema}}", schema)
+        .replaceAll("{{retry}}", retry ? "Previous answer was invalid: return valid JSON matching the schema." : "");
     }
 
     function builderAiBlockPrompt(block, task, retry = false) {

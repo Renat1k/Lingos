@@ -1,51 +1,6 @@
 // LINGUA/OS · Gemini API, AI explain and AI Studio
 "use strict";
 
-    const GEMINI_SYSTEM_PROMPT = `
-You are the LINGUA/OS content generator. Return ONLY one valid JSON object.
-Never wrap JSON in markdown, never add prose before or after it.
-
-Allowed response shape:
-{
-  "vocab": [
-    { "word": "string", "translation": "string", "description": "string", "tags": ["string"] }
-  ],
-  "lessons": [
-    {
-      "title": "string",
-      "subtitle": "string",
-      "level": "A1|A2|B1|B2",
-      "duration": "string",
-      "blocks": [
-        { "type": "theory", "title": "string", "content": "string" },
-        { "type": "reading_heavy", "title": "string", "text": "<p>story text</p>" },
-        { "type": "dialogue", "title": "string", "participants": [{ "id": "a", "name": "A", "initials": "A" }], "messages": [{ "from": "a", "text": "string", "time": "10:00" }] },
-        {
-          "type": "quiz",
-          "title": "string",
-          "questions": [
-            { "question": "string", "options": ["string", "string"], "correct": 0, "explanation": "string" }
-          ]
-        },
-        { "type": "practice_write", "title": "string", "min_words": 30, "prompt": "string" }
-      ]
-    }
-  ],
-  "stories": [
-    { "title": "string", "subtitle": "string", "level": "A1|A2|B1|B2", "read_time": "string", "text": "<p>story text</p>" }
-  ]
-}
-
-Rules:
-- Return exactly one of "lessons", "stories" or "vocab" at the root, matching the requested type.
-- Every lesson has at least one valid block. Allowed block types: theory, reading_heavy, dialogue, quiz, practice_write.
-- Quiz "correct" is a zero-based index into "options"; options must contain at least two strings.
-- "reading_heavy" and story "text" use simple HTML paragraphs only.
-- All learner-facing content must be in the requested learning language.
-- Keep the material age-appropriate, accurate and self-contained.
-- Do not use markdown fences.
-`.trim();
-
     const AI_DIAGNOSTIC_QUESTIONS = [
       { id: "skill", label: "ai_diag_skill", options: ["ai_skill_grammar", "ai_skill_vocab", "ai_skill_reading", "ai_skill_writing"] },
       { id: "grammar", label: "ai_diag_grammar", options: ["ai_grammar_tenses", "ai_grammar_articles", "ai_grammar_prepositions", "ai_grammar_word_order"] },
@@ -147,6 +102,7 @@ Rules:
         code.push(content);
         return `\u0000K${code.length - 1}\u0000`;
       });
+      text = text.replace(/&lt;b&gt;([^<]*?)&lt;\/b&gt;/g, "<b>$1</b>");
       text = text.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
       text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
       text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<i>$2</i>");
@@ -167,6 +123,8 @@ Rules:
       let paragraph = [];
       let listType = "";
       let listItems = [];
+      let listStart = 1;
+      let listExpected = 1;
       let tableRows = [];
 
       const flushParagraph = () => {
@@ -176,9 +134,12 @@ Rules:
       };
       const flushList = () => {
         if (!listItems.length) return;
-        output.push(`<${listType}>${listItems.map((item) => `<li>${aiMarkdownInline(item)}</li>`).join("")}</${listType}>`);
+        const startAttribute = listType === "ol" && listStart !== 1 ? ` start="${listStart}"` : "";
+        output.push(`<${listType}${startAttribute}>${listItems.map((item) => `<li>${aiMarkdownInline(item)}</li>`).join("")}</${listType}>`);
         listItems = [];
         listType = "";
+        listStart = 1;
+        listExpected = 1;
       };
       const flushTable = () => {
         if (!tableRows.length) return;
@@ -221,14 +182,27 @@ Rules:
           }
         }
         const list = line.match(/^\s*([-*])\s+(.+)$/);
-        const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+        const ordered = line.match(/^\s*(\d+)[.)]\s+(.+)$/);
         if (list || ordered) {
           flushParagraph();
           flushTable();
           const nextType = list ? "ul" : "ol";
           if (listType && listType !== nextType) flushList();
-          listType = nextType;
-          listItems.push((list ? list[2] : ordered[1]).trim());
+          if (!listType) {
+            listType = nextType;
+            listStart = ordered ? Number(ordered[1]) : 1;
+            listExpected = listStart;
+          } else if (nextType === "ol") {
+            const number = Number(ordered[1]);
+            if (number !== listExpected) {
+              flushList();
+              listType = "ol";
+              listStart = number;
+              listExpected = number;
+            }
+          }
+          listItems.push((list ? list[2] : ordered[2]).trim());
+          if (listType === "ol") listExpected += 1;
           return;
         }
         flushList();
@@ -899,7 +873,7 @@ Rules:
     function aiAnalysisSystemPrompt() {
       const names = { ru: "Russian", en: "English", da: "Danish", tr: "Turkish" };
       const language = names[state.settings.uiLanguage] || "Russian";
-      return `You are an AI language explainer. Respond only in ${language}. Do not use tables, headings, or an introduction. Use exactly four numbered sections: 1) a short translation; 2) a word-by-word breakdown with no more than 5 items; 3) the grammatical framework in 1–3 lines; 4) idioms, only if present. The phrase being analyzed must stay in its original language.`;
+      return APP_PROMPTS.EXPLAINER_PROMPT.replaceAll("{{language}}", language);
     }
 
     function formatAiRetryText(payload) {
@@ -1897,7 +1871,11 @@ Rules:
       const course = aiChatState?.course || aiStudioCourse;
       const label = course ? aiCourseLabel(course) : "English";
       const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
-      return `${GEMINI_SYSTEM_PROMPT}\nTarget learning language: ${label} (${course || "en"}).\nUI language for explanations: ${uiLanguage}.`;
+      return APP_PROMPTS.COURSE_SYSTEM_PROMPT
+        .replaceAll("{{builder}}", APP_PROMPTS.GEMINI_SYSTEM_PROMPT)
+        .replaceAll("{{label}}", label)
+        .replaceAll("{{code}}", course || "en")
+        .replaceAll("{{uiLanguage}}", uiLanguage);
     }
 
     function buildAiPrompt(options = {}) {
