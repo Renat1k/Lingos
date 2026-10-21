@@ -1,4 +1,4 @@
-# LINGUA/OS — архитектура (v2.13)
+# LINGUA/OS — архитектура (v2.18)
 
 Статическое приложение без сборщика: классические `<script>`, общий global scope, `"use strict"` в каждом файле.
 
@@ -22,12 +22,13 @@
 | `js/stories.js` | Истории, чтение, панель перевода | `renderStoriesHub`, `renderStory`, `openTranslation` | `state`, `dom`, `helpers` |
 | `js/lessons.js` | Dashboard, уроки, 5 типов блоков, практика, тесты | `renderDashboard`, `renderLesson`, `initQuizzes`, `initWriters` | `state`, `dom`, `helpers`, `stories` |
 | `js/import.js` | Import JSON и шаблоны Simple/Master | `importPayload`, `runImport`, `copyTemplateVariant` | `state`, `vocab`, `lessons` |
+| `js/builder.js` | Визуальный конструктор уроков, черновики, JSON-экспорт, точки расширения ИИ | `openLessonBuilder`, `getBuilderLessonJson`, `getBuilderBlockJson`, `applyBuilderBlockPatch`, `applyBuilderLessonPatch` | `state`, `dom`, `helpers`, `lessons`, `import`, `ai-studio` |
 | `js/app.js` | Навигация, языки, курсы, routing, события, boot | `setLearningLanguage`, `route`, `boot` | все предыдущие |
 | `sql/migration.sql` | Ручная Supabase-миграция: `user_id`, RLS, backfill | — | выполняется вручную в Supabase SQL Editor |
 
 ## Порядок подключения
 
-`config → data-default → state → dom → helpers → sync → auth → ai-providers → ai-studio → ui-settings → vocab → stories → lessons → import → app`
+`config → data-default → state → dom → helpers → sync → auth → ai-providers → ai-studio → ui-settings → vocab → stories → lessons → import → builder → app`
 
 `app.js` всегда последний: в нём статические listeners и `boot()`.
 

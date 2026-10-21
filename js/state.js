@@ -95,7 +95,7 @@
       const stored = readJSON(DELETED_KEY, []);
       if (!Array.isArray(stored)) return [];
       return stored
-        .filter((item) => item && typeof item === "object" && (item.type === "word" || item.type === "language"))
+        .filter((item) => item && typeof item === "object" && ["word", "language", "lesson", "story"].includes(item.type))
         .map((item) => ({
           type: item.type,
           language: item.language ? String(item.language) : "",
@@ -341,10 +341,11 @@
     function loadImportedCollections() {
       const importedLessons = readJSON(importedLessonsKey(), []);
       const importedStories = readJSON(importedStoriesKey(), []);
+      const deleted = typeof isContentDeleted === "function" ? isContentDeleted : () => false;
       state.importedLessons = Array.isArray(importedLessons)
-        ? importedLessons.filter((lesson) => lesson && getLessonBlocks(lesson).length)
+        ? importedLessons.filter((lesson) => lesson && getLessonBlocks(lesson).length && !deleted("lesson", lesson.id, lesson.updated_at))
         : [];
       state.importedStories = Array.isArray(importedStories)
-        ? importedStories.filter((story) => story && story.text)
+        ? importedStories.filter((story) => story && story.text && !deleted("story", story.id, story.updated_at))
         : [];
     }

@@ -6,6 +6,139 @@
     let reviewQueue = [];
     let reviewIndex = 0;
 
+    const VOCAB_EDGE_START = /^[\s.,!?;:"'«»„“”¿¡…()\[\]]+/;
+    const VOCAB_EDGE_END = /[\s.,!?;:"'«»„“”¿¡…()\[\]]+$/;
+
+    function vocabLocale(language) {
+      const code = language || currentLanguage();
+      return SPEECH_LANGUAGE_BCP47[code] || code || "en-US";
+    }
+
+    function lowerVocabWord(value, language) {
+      const text = String(value || "");
+      try {
+        return text.toLocaleLowerCase(vocabLocale(language));
+      } catch (error) {
+        return text.toLowerCase();
+      }
+    }
+
+    function cleanWordForSave(word, language) {
+      let value = String(word == null ? "" : word).replace(/\s+/g, " ").trim();
+      let previous = null;
+      while (value && value !== previous) {
+        previous = value;
+        value = value.replace(VOCAB_EDGE_START, "").replace(VOCAB_EDGE_END, "").trim();
+      }
+      if (!value) return "";
+      return language === "de" ? value : lowerVocabWord(value, language);
+    }
+
+    function wordKey(word, language) {
+      const cleaned = cleanWordForSave(word, language);
+      return cleaned ? lowerVocabWord(cleaned, language) : "";
+    }
+
+    function cloneVocabWord(word) {
+      return JSON.parse(JSON.stringify(word));
+    }
+
+    function appendUniqueText(base, addition, separator = "\n") {
+      const current = String(base || "").trim();
+      const next = String(addition || "").trim();
+      if (!next) return current;
+      if (!current) return next;
+      if (current.includes(next)) return current;
+      return `${current}${separator}${next}`;
+    }
+
+    function addOtherTranslation(word, translation) {
+      const value = String(translation || "").trim();
+      if (!value || value === word.translation) return;
+      const label = `${t("vocab_other_translations")}: `;
+      const lines = String(word.description || "").split("\n");
+      const index = lines.findIndex((line) => line.startsWith(label));
+      if (index >= 0) {
+        const translations = lines[index].slice(label.length).split(",").map((item) => item.trim()).filter(Boolean);
+        if (!translations.includes(value)) translations.push(value);
+        lines[index] = `${label}${translations.join(", ")}`;
+      } else {
+        lines.push(`${label}${value}`);
+      }
+      word.description = lines.filter(Boolean).join("\n").trim();
+    }
+
+    function mergeWordData(survivor, other) {
+      if (!survivor || !other || survivor === other) return survivor;
+      survivor.tags = [...new Set([
+        ...(Array.isArray(survivor.tags) ? survivor.tags : []),
+        ...(Array.isArray(other.tags) ? other.tags : [])
+      ].map((tag) => String(tag).trim()).filter(Boolean))];
+      survivor.is_favorite = Boolean(survivor.is_favorite || other.is_favorite);
+      survivor.description = appendUniqueText(survivor.description, other.description);
+      survivor.example = appendUniqueText(survivor.example, other.example);
+      addOtherTranslation(survivor, other.translation);
+      return survivor;
+    }
+
+    function wordCreatedValue(word) {
+      const timestamp = Date.parse(word?.created_at || "");
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+
+    function compareVocabSurvivor(left, right) {
+      const boxDiff = (Number(right.box_level) || 1) - (Number(left.box_level) || 1);
+      if (boxDiff) return boxDiff;
+      const leftCreated = wordCreatedValue(left);
+      const rightCreated = wordCreatedValue(right);
+      if (leftCreated !== null && rightCreated !== null && leftCreated !== rightCreated) {
+        return leftCreated - rightCreated;
+      }
+      return (Number(left.id) || 0) - (Number(right.id) || 0);
+    }
+
+    function sortVocabGroup(group) {
+      return [...group].sort(compareVocabSurvivor);
+    }
+
+    function buildMergedWord(group) {
+      const ordered = sortVocabGroup(group);
+      const survivor = cloneVocabWord(ordered[0]);
+      const cleaned = cleanWordForSave(survivor.word, state.language);
+      if (cleaned) survivor.word = cleaned;
+      ordered.slice(1).forEach((word) => mergeWordData(survivor, word));
+      survivor.updated_at = new Date().toISOString();
+      return survivor;
+    }
+
+    function getDuplicateVocabGroups() {
+      const map = new Map();
+      state.vocab.forEach((word) => {
+        const key = wordKey(word.word, state.language);
+        if (!key) return;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(word);
+      });
+      return [...map.values()].filter((group) => group.length > 1);
+    }
+
+    function mergeVocabGroup(group) {
+      const ordered = sortVocabGroup(group);
+      const survivor = ordered[0];
+      const cleaned = cleanWordForSave(survivor.word, state.language);
+      if (cleaned) survivor.word = cleaned;
+      const removed = [];
+      ordered.slice(1).forEach((word) => {
+        mergeWordData(survivor, word);
+        removed.push(word);
+      });
+      const removedIds = new Set(removed.map((word) => Number(word.id)));
+      state.vocab = state.vocab.filter((word) => !removedIds.has(Number(word.id)));
+      removed.forEach((word) => addTombstone("word", { language: state.language, id: word.id }));
+      survivor.updated_at = new Date().toISOString();
+      return { survivor, removed };
+    }
+
     function getDueReviewCount() {
       const endOfDay = new Date();
       endOfDay.setHours(23, 59, 59, 999);
@@ -44,6 +177,7 @@
         box_level: Math.min(5, Math.max(1, Number(raw.box_level) || 1)),
         next_review_at: String(raw.next_review_at || ""),
         example: String(raw.example || "").trim(),
+        created_at: String(raw.created_at || ""),
         updated_at: String(raw.updated_at || "")
       };
     }
@@ -108,24 +242,185 @@
       const wordId = state.editingWordId;
       const word = state.vocab.find((item) => Number(item.id) === Number(wordId));
       if (!word) return;
-      const nextWord = wordEditorWord.value.trim();
+      const language = state.language;
+      const nextWord = cleanWordForSave(wordEditorWord.value, language);
       const nextTranslation = wordEditorTranslation.value.trim();
-      if (!nextWord || !nextTranslation) {
-        showToast("Слово и перевод не могут быть пустыми.", "error");
+      if (!nextWord) {
+        showToast(t("vocab_word_invalid"), "error");
         return;
       }
+      if (!nextTranslation) {
+        showToast(t("vocab_word_and_translation_required"), "error");
+        return;
+      }
+      const key = wordKey(nextWord, language);
       word.word = nextWord;
       word.translation = nextTranslation;
       word.description = wordEditorDescription.value.trim();
       word.tags = [...new Set(wordEditorTags.value.split(",").map((tag) => tag.trim()).filter(Boolean))];
       word.is_favorite = wordEditorFavorite.checked;
       word.updated_at = new Date().toISOString();
+      const duplicate = state.vocab.find((item) => Number(item.id) !== Number(word.id) && wordKey(item.word, language) === key);
+      if (duplicate) {
+        const survivor = compareVocabSurvivor(word, duplicate) <= 0 ? word : duplicate;
+        const loser = survivor === word ? duplicate : word;
+        mergeWordData(survivor, loser);
+        const cleanedSurvivor = cleanWordForSave(survivor.word, language);
+        if (cleanedSurvivor) survivor.word = cleanedSurvivor;
+        survivor.updated_at = new Date().toISOString();
+        state.vocab = state.vocab.filter((item) => Number(item.id) !== Number(loser.id));
+        addTombstone("word", { language, id: loser.id });
+        saveVocabulary();
+        if (wordEditorModal.open) wordEditorModal.close();
+        renderVocabTagChips();
+        renderVocabResults();
+        updateVocabStats();
+        showToast(t("vocab_merged"), "success");
+        return;
+      }
       saveVocabulary();
       if (wordEditorModal.open) wordEditorModal.close();
       renderVocabTagChips();
       renderVocabResults();
       updateVocabStats();
-      showToast("Слово обновлено.", "success");
+      showToast(t("vocab_word_updated"), "success");
+    }
+
+    let duplicateGroupsCache = [];
+    let vocabUndoSnapshot = null;
+    let vocabUndoTimer = null;
+
+    function duplicateCardMarkup(word) {
+      return `
+        <div class="duplicate-word">
+          <div class="duplicate-word-title">${escapeHtml(word.word)}</div>
+          <div class="duplicate-word-translation">${escapeHtml(word.translation)}</div>
+          <div class="duplicate-word-meta">
+            <span>${escapeHtml(t("vocab_box", { n: Number(word.box_level) || 1 }))}</span>
+            ${(Array.isArray(word.tags) ? word.tags : []).map((tag) => `<span>#${escapeHtml(tag)}</span>`).join("")}
+          </div>
+          ${word.description ? `<p>${escapeHtml(word.description)}</p>` : ""}
+        </div>
+      `;
+    }
+
+    function renderDuplicateGroups(groups) {
+      const host = document.getElementById("duplicatesGroups");
+      const summary = document.getElementById("duplicatesSummary");
+      const mergeAll = document.getElementById("duplicatesMergeAll");
+      if (!host) return;
+      if (!groups.length) {
+        host.innerHTML = `<div class="duplicates-empty">${escapeHtml(t("vocab_duplicates_empty"))}</div>`;
+        if (summary) summary.textContent = t("vocab_duplicates_empty");
+        if (mergeAll) mergeAll.hidden = true;
+        return;
+      }
+      const words = groups.reduce((sum, group) => sum + group.length, 0);
+      if (summary) summary.textContent = t("vocab_duplicates_summary", { groups: groups.length, words });
+      if (mergeAll) mergeAll.hidden = false;
+      host.innerHTML = groups.map((group, index) => {
+        const ordered = sortVocabGroup(group);
+        const after = buildMergedWord(group);
+        return `
+          <article class="duplicate-group" data-duplicate-group="${index}">
+            <div class="duplicate-group-head">
+              <span>GROUP ${pad(index + 1)} · ${group.length} WORDS</span>
+              <button class="btn btn-secondary" type="button" data-merge-duplicate="${index}">${escapeHtml(t("vocab_merge"))}</button>
+            </div>
+            <div class="duplicate-compare">
+              <div class="duplicate-column">
+                <span class="duplicate-label">${escapeHtml(t("vocab_before"))}</span>
+                ${ordered.map(duplicateCardMarkup).join("")}
+              </div>
+              <div class="duplicate-column is-after">
+                <span class="duplicate-label">${escapeHtml(t("vocab_after"))}</span>
+                ${duplicateCardMarkup(after)}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function openDuplicateChecker() {
+      duplicateGroupsCache = getDuplicateVocabGroups();
+      renderDuplicateGroups(duplicateGroupsCache);
+      const modal = document.getElementById("duplicatesModal");
+      if (!modal) return;
+      if (!modal.open) {
+        if (typeof modal.showModal === "function") modal.showModal();
+        else modal.setAttribute("open", "");
+      }
+      window.setTimeout(() => document.getElementById("duplicatesClose")?.focus(), 60);
+    }
+
+    function closeDuplicateChecker() {
+      const modal = document.getElementById("duplicatesModal");
+      if (!modal) return;
+      if (modal.open && typeof modal.close === "function") modal.close();
+      else modal.removeAttribute("open");
+      duplicateGroupsCache = [];
+    }
+
+    function hideVocabUndo() {
+      window.clearTimeout(vocabUndoTimer);
+      vocabUndoTimer = null;
+      vocabUndoSnapshot = null;
+      const bar = document.getElementById("vocabUndo");
+      if (bar) bar.hidden = true;
+    }
+
+    function showVocabUndo(snapshot, groups, removed) {
+      window.clearTimeout(vocabUndoTimer);
+      vocabUndoSnapshot = snapshot;
+      const bar = document.getElementById("vocabUndo");
+      const text = document.getElementById("vocabUndoText");
+      if (!bar || !text) return;
+      text.textContent = t("vocab_merge_undo", { groups, removed });
+      bar.hidden = false;
+      vocabUndoTimer = window.setTimeout(hideVocabUndo, 10000);
+    }
+
+    function undoVocabMerge() {
+      if (!vocabUndoSnapshot) return;
+      const snapshot = vocabUndoSnapshot;
+      if (snapshot.language !== state.language) {
+        hideVocabUndo();
+        return;
+      }
+      state.vocab = snapshot.words.map(cloneVocabWord);
+      saveVocabulary();
+      saveTombstones(snapshot.tombstones);
+      hideVocabUndo();
+      renderVocabTagChips();
+      renderVocabResults();
+      updateVocabStats();
+      showToast(t("vocab_merge_undone"), "info");
+    }
+
+    function mergeDuplicateGroups(indexes) {
+      const groups = indexes.map((index) => duplicateGroupsCache[index]).filter(Boolean);
+      if (!groups.length) return;
+      const snapshot = {
+        language: state.language,
+        words: state.vocab.map(cloneVocabWord),
+        tombstones: loadTombstones()
+      };
+      let removed = 0;
+      groups.forEach((group) => {
+        const result = mergeVocabGroup(group);
+        removed += result.removed.length;
+      });
+      saveVocabulary();
+      closeDuplicateChecker();
+      renderVocabTagChips();
+      renderVocabResults();
+      updateVocabStats();
+      showVocabUndo(snapshot, groups.length, removed);
+    }
+
+    function mergeAllDuplicates() {
+      mergeDuplicateGroups(duplicateGroupsCache.map((group, index) => index));
     }
 
     /* ---------- vocabulary pronunciation ---------- */
@@ -701,6 +996,7 @@
                 <input id="vocabSearchInput" type="search" value="${escapeHtml(state.vocabSearch)}" placeholder="${escapeHtml(t("search_placeholder"))}" autocomplete="off" aria-label="${escapeHtml(t("search_placeholder"))}" />
               </label>
               <div class="vocab-toolbar-actions">
+                <button class="btn btn-secondary data-tool-btn" type="button" data-check-vocab>🧹 ${escapeHtml(t("vocab_check"))}</button>
                 <button class="btn btn-secondary data-tool-btn" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import"))}</button>
                 <button class="btn btn-quiet data-tool-btn" type="button" data-export-vocab>${icon("download")} ${escapeHtml(t("export"))}</button>
               </div>
@@ -963,6 +1259,29 @@
     document.getElementById("reviewModal")?.addEventListener("click", (event) => {
       if (event.target.id === "reviewModal") closeReviewModal();
     });
+
+    document.addEventListener("click", (event) => {
+      if (event.target.closest("[data-check-vocab]")) {
+        event.preventDefault();
+        openDuplicateChecker();
+        return;
+      }
+      const mergeButton = event.target.closest("[data-merge-duplicate]");
+      if (mergeButton) {
+        event.preventDefault();
+        mergeDuplicateGroups([Number(mergeButton.dataset.mergeDuplicate)]);
+      }
+    });
+    document.getElementById("duplicatesClose")?.addEventListener("click", closeDuplicateChecker);
+    document.getElementById("duplicatesCancel")?.addEventListener("click", closeDuplicateChecker);
+    document.getElementById("duplicatesMergeAll")?.addEventListener("click", mergeAllDuplicates);
+    document.getElementById("duplicatesModal")?.addEventListener("click", (event) => {
+      if (event.target.id === "duplicatesModal") closeDuplicateChecker();
+    });
+    document.getElementById("duplicatesModal")?.addEventListener("close", () => {
+      duplicateGroupsCache = [];
+    });
+    document.getElementById("vocabUndoButton")?.addEventListener("click", undoVocabMerge);
 
     function downloadVocabulary() {
       const language = currentLanguage();

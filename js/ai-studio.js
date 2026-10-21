@@ -141,6 +141,104 @@ Rules:
       return technical ? `${localized} · ${technical}` : localized;
     }
 
+    function aiMarkdownInline(value) {
+      const code = [];
+      let text = String(value || "").replace(/`([^`]+)`/g, (match, content) => {
+        code.push(content);
+        return `\u0000K${code.length - 1}\u0000`;
+      });
+      text = text.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+      text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
+      text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<i>$2</i>");
+      text = text.replace(/\u0000K(\d+)\u0000/g, (match, index) => `<code>${code[Number(index)] || ""}</code>`);
+      return text;
+    }
+
+    function renderAiMarkdown(text) {
+      let source = escapeHtml(String(text || "")).replace(/\r\n?/g, "\n");
+      const codeBlocks = [];
+      source = source.replace(/```[^\n]*\n?([\s\S]*?)```/g, (match, block) => {
+        codeBlocks.push(block.replace(/\n+$/g, ""));
+        return `\u0000C${codeBlocks.length - 1}\u0000`;
+      });
+      source = source.replace(/```/g, "");
+      const lines = source.split("\n");
+      const output = [];
+      let paragraph = [];
+      let listType = "";
+      let listItems = [];
+      let tableRows = [];
+
+      const flushParagraph = () => {
+        if (!paragraph.length) return;
+        output.push(`<p>${paragraph.map((line) => aiMarkdownInline(line)).join("<br>")}</p>`);
+        paragraph = [];
+      };
+      const flushList = () => {
+        if (!listItems.length) return;
+        output.push(`<${listType}>${listItems.map((item) => `<li>${aiMarkdownInline(item)}</li>`).join("")}</${listType}>`);
+        listItems = [];
+        listType = "";
+      };
+      const flushTable = () => {
+        if (!tableRows.length) return;
+        output.push(`<ul>${tableRows.map((cells) => `<li>${cells.map((cell) => aiMarkdownInline(cell)).join(" · ")}</li>`).join("")}</ul>`);
+        tableRows = [];
+      };
+      const flushAll = () => {
+        flushParagraph();
+        flushList();
+        flushTable();
+      };
+
+      lines.forEach((line) => {
+        const codeMatch = line.match(/^\u0000C(\d+)\u0000$/);
+        if (codeMatch) {
+          flushAll();
+          const block = codeBlocks[Number(codeMatch[1])] || "";
+          output.push(`<p><code>${block.replace(/\n/g, "<br>")}</code></p>`);
+          return;
+        }
+        if (!line.trim()) {
+          flushAll();
+          return;
+        }
+        const heading = line.match(/^\s*#{1,6}\s+(.+)$/);
+        if (heading) {
+          flushAll();
+          output.push(`<p><b>${aiMarkdownInline(heading[1].trim())}</b></p>`);
+          return;
+        }
+        const separator = line.includes("|") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("-");
+        if (separator) return;
+        if (line.includes("|")) {
+          const cells = line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((cell) => cell.trim()).filter(Boolean);
+          if (cells.length >= 2) {
+            flushParagraph();
+            flushList();
+            tableRows.push(cells);
+            return;
+          }
+        }
+        const list = line.match(/^\s*([-*])\s+(.+)$/);
+        const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+        if (list || ordered) {
+          flushParagraph();
+          flushTable();
+          const nextType = list ? "ul" : "ol";
+          if (listType && listType !== nextType) flushList();
+          listType = nextType;
+          listItems.push((list ? list[2] : ordered[1]).trim());
+          return;
+        }
+        flushList();
+        flushTable();
+        paragraph.push(line.trim());
+      });
+      flushAll();
+      return output.join("");
+    }
+
     function setGeminiStatus(kind, detail) {
       if (!geminiStatus) return;
       geminiStatus.dataset.state = kind || "";
@@ -650,8 +748,23 @@ Rules:
       return element?.closest("[data-ai-selectable], .reading-prose, .story-prose, .chat-body") || null;
     }
 
+    const aiSelectionBar = document.getElementById("aiSelectionBar");
+    const aiBarAnalyze = document.getElementById("aiBarAnalyze");
+    const aiBarCopy = document.getElementById("aiBarCopy");
+    const aiCoarsePointer = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
+
+    function isTouchSelectionMode() {
+      return Boolean(aiCoarsePointer?.matches);
+    }
+
+    function hideAiSelectionBar() {
+      if (aiSelectionBar) aiSelectionBar.hidden = true;
+      document.body.classList.remove("has-ai-selection-bar");
+    }
+
     function hideAiSelectionButton() {
       if (aiAnalyzeButton) aiAnalyzeButton.hidden = true;
+      hideAiSelectionBar();
       aiSelectionState = null;
     }
 
@@ -665,8 +778,14 @@ Rules:
       aiAnalyzeButton.hidden = false;
     }
 
+    function showAiSelectionBar() {
+      if (!aiSelectionBar) return;
+      aiSelectionBar.hidden = false;
+      document.body.classList.add("has-ai-selection-bar");
+    }
+
     function refreshAiSelectionButton() {
-      if (!aiAnalyzeButton || document.getElementById("aiAnalysisModal")?.open) {
+      if (document.getElementById("aiAnalysisModal")?.open) {
         hideAiSelectionButton();
         return;
       }
@@ -686,21 +805,53 @@ Rules:
         hideAiSelectionButton();
         return;
       }
+      aiSelectionState = {
+        text: text.slice(0, 600),
+        copyText: text,
+        context: String(container.textContent || "").replace(/\s+/g, " ").trim().slice(0, 8000)
+      };
+      if (isTouchSelectionMode()) {
+        if (aiAnalyzeButton) aiAnalyzeButton.hidden = true;
+        showAiSelectionBar();
+        return;
+      }
+      hideAiSelectionBar();
       const rect = range.getBoundingClientRect();
       if (!rect || !rect.width || !rect.height) {
         hideAiSelectionButton();
         return;
       }
-      aiSelectionState = {
-        text: text.slice(0, 600),
-        context: String(container.textContent || "").replace(/\s+/g, " ").trim().slice(0, 8000)
-      };
       positionAiSelectionButton(rect);
     }
 
     function scheduleAiSelectionButton() {
       window.clearTimeout(aiSelectionTimer);
-      aiSelectionTimer = window.setTimeout(refreshAiSelectionButton, 90);
+      aiSelectionTimer = window.setTimeout(refreshAiSelectionButton, 200);
+    }
+
+    let aiSelectionLastTouch = 0;
+
+    function preventSelectionLoss(event) {
+      event.preventDefault();
+    }
+
+    function runSelectionBarAction(button) {
+      if (!button) return;
+      if (button === aiBarAnalyze || button === aiAnalyzeButton) analyzeSelectedText();
+      else if (button === aiBarCopy) void copyAiSelection();
+    }
+
+    async function copyAiSelection() {
+      const text = aiSelectionState?.copyText || aiSelectionState?.text || "";
+      if (!text) return;
+      try {
+        if (typeof copyTextToClipboard === "function") await copyTextToClipboard(text);
+        else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else throw new Error("Clipboard unavailable.");
+        showToast(t("ai_selection_copied"), "success");
+      } catch (error) {
+        showToast(t("ai_selection_copy_failed"), "error");
+      }
     }
 
     function openAiAnalysisSheet() {
@@ -715,12 +866,14 @@ Rules:
       if (!modal) return;
       if (modal.open && typeof modal.close === "function") modal.close();
       else modal.removeAttribute("open");
+      scheduleAiSelectionButton();
     }
 
-    function setAiAnalysisContent(text, isError = false, showRetry = false) {
+    function setAiAnalysisContent(text, isError = false, showRetry = false, markdown = false) {
       const body = document.getElementById("aiAnalysisBody");
       if (!body) return;
-      body.textContent = text;
+      if (markdown) body.innerHTML = renderAiMarkdown(text);
+      else body.textContent = text;
       body.classList.toggle("is-error", isError);
       const retry = document.getElementById("aiAnalysisRetry");
       if (retry) retry.hidden = !showRetry;
@@ -741,6 +894,12 @@ Rules:
       if (cancel) cancel.hidden = !busy;
       const retry = document.getElementById("aiAnalysisRetry");
       if (retry && busy) retry.hidden = true;
+    }
+
+    function aiAnalysisSystemPrompt() {
+      const names = { ru: "Russian", en: "English", da: "Danish", tr: "Turkish" };
+      const language = names[state.settings.uiLanguage] || "Russian";
+      return `You are an AI language explainer. Respond only in ${language}. Do not use tables, headings, or an introduction. Use exactly four numbered sections: 1) a short translation; 2) a word-by-word breakdown with no more than 5 items; 3) the grammatical framework in 1–3 lines; 4) idioms, only if present. The phrase being analyzed must stay in its original language.`;
     }
 
     function formatAiRetryText(payload) {
@@ -766,10 +925,10 @@ Rules:
       setAiAnalysisBusy(true);
       const controller = new AbortController();
       aiAnalysisAbort = controller;
-      const uiLanguage = UI_LANGUAGES[state.settings.uiLanguage]?.label || "Русский";
-      const prompt = `Разобрать фразу '${text}' из контекста '${context}'. Дай пословный перевод, грамматический разбор и объяснение идиом. Отвечай строго на языке UI: '${uiLanguage}'.`;
+      const prompt = `Analyze this phrase in its original language: "${text}". Context: "${context}".`;
       try {
         const result = await generateAiText(prompt, {
+          system: aiAnalysisSystemPrompt(),
           temperature: 0.25,
           maxOutputTokens: 4096,
           signal: controller.signal,
@@ -778,7 +937,7 @@ Rules:
           }
         });
         aiAnalysisLastResult = result;
-        setAiAnalysisContent(result.text);
+        setAiAnalysisContent(result.text, false, false, true);
         setAiAnalysisMeta(t("ai_analysis_meta", {
           provider: aiProviderLabel(result.provider),
           model: result.model
@@ -1333,7 +1492,11 @@ Rules:
       row.className = `ai-chat-message ${role === "user" ? "is-user" : "is-assistant"}${options.kind ? ` is-${options.kind}` : ""}`;
       const bubble = document.createElement("div");
       bubble.className = "ai-chat-bubble";
-      if (text) bubble.textContent = text;
+      const useMarkdown = role === "assistant" && options.kind !== "status" && options.kind !== "preview-summary" && options.markdown !== false;
+      if (text) {
+        if (useMarkdown) bubble.innerHTML = renderAiMarkdown(text);
+        else bubble.textContent = text;
+      }
       row.appendChild(bubble);
       if (options.node) bubble.appendChild(options.node);
       if (options.chips) {
@@ -2325,16 +2488,51 @@ Rules:
     document.addEventListener("selectionchange", scheduleAiSelectionButton);
     document.addEventListener("mouseup", scheduleAiSelectionButton);
     document.addEventListener("keyup", scheduleAiSelectionButton);
-    window.addEventListener("scroll", hideAiSelectionButton, true);
+    window.addEventListener("scroll", () => {
+      if (isTouchSelectionMode()) scheduleAiSelectionButton();
+      else hideAiSelectionButton();
+    }, true);
     window.addEventListener("resize", hideAiSelectionButton);
 
-    aiAnalyzeButton?.addEventListener("mousedown", (event) => event.preventDefault());
+    [aiAnalyzeButton, aiBarAnalyze, aiBarCopy].forEach((button) => {
+      if (!button) return;
+      button.addEventListener("pointerdown", preventSelectionLoss);
+      button.addEventListener("mousedown", preventSelectionLoss);
+      button.addEventListener("touchstart", preventSelectionLoss, { passive: false });
+      button.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        aiSelectionLastTouch = Date.now();
+        runSelectionBarAction(button);
+      }, { passive: false });
+    });
     aiAnalyzeButton?.addEventListener("click", (event) => {
+      if (Date.now() - aiSelectionLastTouch < 700) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       analyzeSelectedText();
     });
+    aiBarAnalyze?.addEventListener("click", (event) => {
+      if (Date.now() - aiSelectionLastTouch < 700) {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      analyzeSelectedText();
+    });
+    aiBarCopy?.addEventListener("click", (event) => {
+      if (Date.now() - aiSelectionLastTouch < 700) {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      void copyAiSelection();
+    });
+    aiCoarsePointer?.addEventListener?.("change", scheduleAiSelectionButton);
 
     document.getElementById("aiAnalysisClose")?.addEventListener("click", closeAiAnalysisSheet);
+    document.getElementById("aiAnalysisModal")?.addEventListener("close", scheduleAiSelectionButton);
     document.getElementById("aiAnalysisRetry")?.addEventListener("click", () => {
       if (aiLastAnalysis) void runAiAnalysis(aiLastAnalysis.text, aiLastAnalysis.context);
     });

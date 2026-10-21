@@ -4,13 +4,30 @@
     /* ---------- stories ---------- */
     let showHiddenStories = false;
 
+    function normalizeHiddenEntry(value, fallbackAt) {
+      if (value === true) return { hidden: true, at: String(fallbackAt || "") };
+      if (!value || typeof value !== "object") return null;
+      return { hidden: Boolean(value.hidden), at: String(value.at || fallbackAt || "") };
+    }
+
+    function normalizeHiddenBucket(bucket, fallbackAt) {
+      const normalized = {};
+      if (!bucket || typeof bucket !== "object") return normalized;
+      Object.entries(bucket).forEach(([id, value]) => {
+        const entry = normalizeHiddenEntry(value, fallbackAt);
+        if (entry) normalized[String(id)] = entry;
+      });
+      return normalized;
+    }
+
     function getHiddenContent() {
       const stored = readJSON(HIDDEN_CONTENT_KEY, null);
       const source = stored && typeof stored === "object" ? stored : {};
+      const updatedAt = String(source.updated_at || "");
       return {
-        lessons: source.lessons && typeof source.lessons === "object" ? source.lessons : {},
-        stories: source.stories && typeof source.stories === "object" ? source.stories : {},
-        updated_at: String(source.updated_at || "")
+        lessons: normalizeHiddenBucket(source.lessons, updatedAt),
+        stories: normalizeHiddenBucket(source.stories, updatedAt),
+        updated_at: updatedAt
       };
     }
 
@@ -21,27 +38,27 @@
     function isContentHidden(type, id) {
       if (type !== "lesson" && type !== "story") return false;
       const bucket = getHiddenContent()[hiddenBucketKey(type)];
-      return Boolean(bucket && bucket[String(id)]);
+      return Boolean(bucket && bucket[String(id)]?.hidden);
     }
 
     function setContentHidden(type, id, hidden) {
       if (type !== "lesson" && type !== "story") return false;
       const content = getHiddenContent();
       const bucket = content[hiddenBucketKey(type)];
-      if (hidden) bucket[String(id)] = true;
-      else delete bucket[String(id)];
-      content.updated_at = new Date().toISOString();
+      const now = new Date().toISOString();
+      bucket[String(id)] = { hidden: Boolean(hidden), at: now };
+      content.updated_at = now;
       return writeJSON(HIDDEN_CONTENT_KEY, content);
     }
 
-    function isContentDeleted(type, id) {
-      return Boolean(findTombstone(type, { language: state.language, id: String(id) }));
+    function isContentDeleted(type, id, updatedAt) {
+      return tombstoneBlocks(findTombstone(type, { language: state.language, id: String(id) }), { updated_at: updatedAt });
     }
 
     function applyHiddenFlags(type, items) {
       const bucket = getHiddenContent()[hiddenBucketKey(type)] || {};
       (Array.isArray(items) ? items : []).forEach((item) => {
-        item.is_hidden = Boolean(bucket[String(item.id)]);
+        item.is_hidden = Boolean(bucket[String(item.id)]?.hidden);
       });
       return items;
     }
@@ -78,12 +95,12 @@
     }
 
     function getVisibleStories() {
-      return applyHiddenFlags("story", state.stories.filter((story) => !isContentDeleted("story", story.id)))
+      return applyHiddenFlags("story", state.stories.filter((story) => !isContentDeleted("story", story.id, story.updated_at)))
         .filter((story) => showHiddenStories || !story.is_hidden);
     }
 
     function getHiddenStoryCount() {
-      return state.stories.filter((story) => isContentHidden("story", story.id) && !isContentDeleted("story", story.id)).length;
+      return state.stories.filter((story) => isContentHidden("story", story.id) && !isContentDeleted("story", story.id, story.updated_at)).length;
     }
 
     function storyActionMarkup(story) {
@@ -115,10 +132,135 @@
       };
     }
 
+    function renderStoriesStatsMarkup(stats) {
+      return `
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LIBRARY</span></div>
+          <div><div class="stat-value" data-story-stat="total">${stats.total}</div><span class="stat-label">историй в библиотеке</span></div>
+        </div>
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">FINISHED</span></div>
+          <div><div class="stat-value" data-story-stat="read">${stats.readCount}<small>из ${stats.total}</small></div><span class="stat-label">прочитано</span></div>
+        </div>
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("clock")}</span><span class="stat-code">MINUTES</span></div>
+          <div><div class="stat-value" data-story-stat="minutes">${stats.totalMinutes}<small>мин</small></div><span class="stat-label">доступного чтения</span></div>
+        </div>
+      `;
+    }
+
+    function renderStoriesCourseLines(stats) {
+      return stats.cards.map((item, index) => `
+        <div class="course-line">
+          <span class="course-line-label"><span>${pad(index + 1)}</span>${escapeHtml(item.story.title)}</span>
+          <strong>${item.read ? "100" : "0"}%</strong>
+          <div class="course-line-track"><span style="width:${item.read ? 100 : 0}%"></span></div>
+        </div>
+      `).join("");
+    }
+
+    function updateStoriesSummary() {
+      if (state.view !== "stories") return;
+      const stats = getStoriesStats();
+      const ring = document.querySelector(".stories-hub .course-ring");
+      if (ring) {
+        ring.style.setProperty("--p", stats.percent);
+        const ringValue = ring.querySelector("strong");
+        if (ringValue) ringValue.textContent = `${stats.percent}%`;
+      }
+      const summaryCopy = document.querySelector(".stories-hub .course-summary-copy");
+      if (summaryCopy) {
+        const status = summaryCopy.querySelector("strong");
+        if (status) status.textContent = stats.readCount === 0 ? "Ready to wander" : stats.readCount >= stats.total ? "Library complete" : "In the middle of a story";
+        const detail = summaryCopy.querySelector("p");
+        if (detail) detail.textContent = `${stats.readCount}/${stats.total} историй · ${stats.totalMinutes} минут чтения`;
+      }
+      const courseLines = document.querySelector(".stories-hub .course-lines");
+      if (courseLines) courseLines.innerHTML = renderStoriesCourseLines(stats);
+      const statHost = document.querySelector(".stories-hub .dashboard-stats");
+      if (statHost) statHost.innerHTML = renderStoriesStatsMarkup(stats);
+      const eyebrowLevel = document.querySelector(".stories-hub .dashboard-hero .eyebrow-level");
+      if (eyebrowLevel) eyebrowLevel.textContent = `${stats.total} STORIES`;
+      const kicker = document.querySelector(".stories-hub .modules-kicker");
+      if (kicker) kicker.textContent = `STORIES / ${pad(stats.total)}`;
+      const count = document.querySelector(".stories-hub .stories-section-count");
+      if (count) count.textContent = `${stats.readCount} ${t("read")} · ${stats.total} ${t("total")}`;
+      const tools = document.querySelector(".stories-hub .stories-section-tools");
+      if (tools) {
+        let toggle = tools.querySelector("[data-toggle-hidden-stories]");
+        if (stats.hidden || showHiddenStories) {
+          if (!toggle) {
+            toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "btn btn-quiet content-hidden-toggle";
+            toggle.dataset.toggleHiddenStories = "";
+            tools.appendChild(toggle);
+          }
+          toggle.textContent = showHiddenStories ? t("hidden_hide") : t("hidden_show", { n: stats.hidden });
+        } else if (toggle) {
+          toggle.remove();
+        }
+      }
+      const list = document.querySelector(".stories-hub .story-list");
+      if (list) {
+        const empty = list.querySelector(".stories-empty");
+        if (!stats.cards.length && !empty) {
+          list.innerHTML = `<div class="stories-empty"><strong>${escapeHtml(t("stories_empty_title", { lang: languageLabel(currentLanguage()) }))}</strong><br>${escapeHtml(t("stories_empty_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`;
+        } else if (stats.cards.length && empty) {
+          empty.remove();
+        }
+      }
+      topbarContext.textContent = `library / ${pad(stats.total)} stories`;
+      progressValue.textContent = pad(stats.percent);
+      topProgressBar.style.width = `${stats.percent}%`;
+      const topbarProgress = document.getElementById("topbarProgress");
+      if (topbarProgress) topbarProgress.setAttribute("aria-label", `Прочитано ${stats.readCount} из ${stats.total} историй`);
+      const footerMeta = document.getElementById("footerMeta");
+      if (footerMeta) footerMeta.textContent = `library / ${stats.total} stories · v2.8`;
+    }
+
+    function refreshStoryCard(storyId) {
+      const card = document.querySelector(`.story-card[data-story-id="${Number(storyId)}"]`);
+      if (!card) return;
+      const stats = getStoriesStats();
+      const index = stats.cards.findIndex((item) => Number(item.story.id) === Number(storyId));
+      if (index < 0) {
+        removeStoryCard(storyId);
+        return;
+      }
+      card.outerHTML = renderStoryCard(stats.cards[index], index);
+      document.querySelector(`.story-card[data-story-id="${Number(storyId)}"]`)?.classList.add("active");
+    }
+
+    function removeStoryCard(storyId) {
+      const card = document.querySelector(`.story-card[data-story-id="${Number(storyId)}"]`);
+      updateStoriesSummary();
+      if (!card) return;
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      if (reduce || typeof card.animate !== "function") {
+        card.remove();
+        return;
+      }
+      card.style.pointerEvents = "none";
+      const animation = card.animate(
+        [{ opacity: 1, transform: "translateY(0)" }, { opacity: 0, transform: "translateY(-8px)" }],
+        { duration: 160, easing: "ease-out" }
+      );
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        card.remove();
+      };
+      window.setTimeout(finish, 220);
+      if (animation?.finished?.then) animation.finished.then(finish).catch(finish);
+      else finish();
+    }
+
     function renderStoryCard(item, index) {
       const { story, read, words, vocab } = item;
       return `
-        <article class="story-card reveal${read ? " is-read" : ""}" style="--i:${index}" aria-labelledby="story-card-title-${story.id}">
+        <article class="story-card reveal${read ? " is-read" : ""}" data-story-id="${Number(story.id)}" style="--i:${index}" aria-labelledby="story-card-title-${story.id}">
           <div class="story-spine" aria-hidden="true">
             <div class="story-spine-top">
               <span>STORY_${pad(story.id)}</span>
@@ -223,17 +365,17 @@
           </div>
 
           <div class="dashboard-stats" aria-label="Статистика чтения">
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LIBRARY</span></div>
-              <div><div class="stat-value">${stats.total}</div><span class="stat-label">историй в библиотеке</span></div>
+              <div><div class="stat-value" data-story-stat="total">${stats.total}</div><span class="stat-label">историй в библиотеке</span></div>
             </div>
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">FINISHED</span></div>
-              <div><div class="stat-value">${stats.readCount}<small>из ${stats.total}</small></div><span class="stat-label">прочитано</span></div>
+              <div><div class="stat-value" data-story-stat="read">${stats.readCount}<small>из ${stats.total}</small></div><span class="stat-label">прочитано</span></div>
             </div>
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("clock")}</span><span class="stat-code">MINUTES</span></div>
-              <div><div class="stat-value">${stats.totalMinutes}<small>мин</small></div><span class="stat-label">доступного чтения</span></div>
+              <div><div class="stat-value" data-story-stat="minutes">${stats.totalMinutes}<small>мин</small></div><span class="stat-label">доступного чтения</span></div>
             </div>
           </div>
 
@@ -278,20 +420,21 @@
       state.stories = mergeById(state.languagePack?.stories || [], state.importedStories);
       addTombstone("story", { id: String(storyId), language: state.language });
       showToast(t("story_deleted"), "success");
-      renderStoriesHub();
+      removeStoryCard(storyId);
     }
 
     function hideStory(storyId) {
       setContentHidden("story", storyId, true);
       showHiddenStories = false;
       showToast(t("story_hidden"), "info");
-      renderStoriesHub();
+      removeStoryCard(storyId);
     }
 
     function showStory(storyId) {
       setContentHidden("story", storyId, false);
       showToast(t("story_shown"), "info");
-      renderStoriesHub();
+      refreshStoryCard(storyId);
+      updateStoriesSummary();
     }
 
     document.addEventListener("click", (event) => {

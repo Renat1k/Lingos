@@ -11,7 +11,7 @@
   <meta name="description" content="LINGUA/OS — мультиязычная учебная среда: английский курс, истории, Vocabulary Vault, импорт JSON и Google-профиль." />
   <title>LINGUA/OS — Language workspace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <link rel="stylesheet" href="css/style.css?v=2.14" />
+  <link rel="stylesheet" href="css/style.css?v=2.19" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -612,6 +612,33 @@
     </div>
   </dialog>
 
+  <dialog class="duplicates-modal" id="duplicatesModal" aria-labelledby="duplicatesTitle">
+    <div class="duplicates-panel">
+      <header class="duplicates-head">
+        <div>
+          <span class="settings-kicker"><i aria-hidden="true"></i> LEXICON QA / DUPLICATES</span>
+          <h2 id="duplicatesTitle" data-i18n="vocab_duplicates_title">Проверка словаря</h2>
+        </div>
+        <button class="icon-btn" id="duplicatesClose" type="button" data-i18n-aria="close" aria-label="Закрыть">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+      <div class="duplicates-body">
+        <p class="duplicates-summary" id="duplicatesSummary" aria-live="polite"></p>
+        <div class="duplicates-groups" id="duplicatesGroups"></div>
+      </div>
+      <footer class="duplicates-actions">
+        <button class="btn btn-quiet" id="duplicatesCancel" type="button" data-i18n="cancel">Отмена</button>
+        <button class="btn btn-primary" id="duplicatesMergeAll" type="button" data-i18n="vocab_merge_all" hidden>Объединить все</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <div class="vocab-undo" id="vocabUndo" role="status" aria-live="polite" hidden>
+    <span id="vocabUndoText"></span>
+    <button class="btn btn-quiet" id="vocabUndoButton" type="button" data-i18n="vocab_undo">Отменить</button>
+  </div>
+
   <dialog class="import-modal" id="importModal" aria-labelledby="importTitle">
     <div class="import-panel">
       <header class="import-head">
@@ -730,6 +757,10 @@
   </dialog>
 
   <button class="ai-selection-btn" id="aiAnalyzeBtn" type="button" hidden data-i18n="ai_explain">✨ ИИ-Разбор</button>
+  <div class="ai-selection-bar" id="aiSelectionBar" role="group" hidden data-i18n-aria="ai_selection_actions" aria-label="Действия с выделением">
+    <button class="ai-selection-bar-analyze" id="aiBarAnalyze" type="button" data-i18n="ai_explain">✨ ИИ-Разбор</button>
+    <button class="ai-selection-bar-copy" id="aiBarCopy" type="button" data-i18n-aria="ai_selection_copy" aria-label="Копировать">📋</button>
+  </div>
 
   <dialog class="ai-sheet" id="aiAnalysisModal" aria-labelledby="aiAnalysisTitle">
     <div class="ai-sheet-panel">
@@ -800,23 +831,73 @@
     </div>
   </dialog>
 
+  <dialog class="builder-start-modal" id="lessonCreateModal" aria-labelledby="lessonCreateTitle">
+    <div class="builder-start-panel">
+      <header class="builder-start-head">
+        <div>
+          <span class="settings-kicker"><i aria-hidden="true"></i> LESSON FACTORY / NEW</span>
+          <h2 id="lessonCreateTitle" data-i18n="builder_create_title">Новый урок</h2>
+          <p data-i18n="builder_create_subtitle">Выбери способ создания урока.</p>
+        </div>
+        <button class="icon-btn" id="lessonCreateClose" type="button" data-i18n-aria="close" aria-label="Закрыть">
+          <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+        </button>
+      </header>
+      <div class="builder-start-options">
+        <button class="builder-start-option" type="button" data-create-with-ai>
+          <span class="builder-start-icon" aria-hidden="true">✨</span>
+          <span><strong data-i18n="builder_create_ai">С помощью ИИ</strong><small data-i18n="builder_create_ai_hint">AI Studio откроется с текущим курсом и типом «Урок».</small></span>
+        </button>
+        <button class="builder-start-option" type="button" data-create-manual>
+          <span class="builder-start-icon" aria-hidden="true">🛠</span>
+          <span><strong data-i18n="builder_create_manual">Вручную (Конструктор)</strong><small data-i18n="builder_create_manual_hint">Дружелюбные формы без JSON.</small></span>
+        </button>
+        <button class="builder-start-option" type="button" data-create-import>
+          <span class="builder-start-icon" aria-hidden="true">📥</span>
+          <span><strong data-i18n="builder_create_import">Импорт JSON</strong><small data-i18n="builder_create_import_hint">Старое окно импорта и шаблоны.</small></span>
+        </button>
+      </div>
+      <footer class="builder-start-actions">
+        <button class="btn btn-quiet" id="lessonCreateCancel" type="button" data-i18n="cancel">Отмена</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <dialog class="builder-draft-modal" id="builderDraftModal" aria-labelledby="builderDraftTitle">
+    <div class="builder-draft-panel">
+      <header class="builder-draft-head">
+        <div>
+          <span class="settings-kicker"><i aria-hidden="true"></i> DRAFT RECOVERY</span>
+          <h2 id="builderDraftTitle" data-i18n="builder_draft_title">Найден черновик</h2>
+        </div>
+      </header>
+      <p class="builder-draft-summary" id="builderDraftSummary"></p>
+      <div class="builder-draft-actions">
+        <button class="btn btn-quiet" id="builderDraftCancel" type="button" data-i18n="cancel">Отмена</button>
+        <button class="btn btn-secondary" id="builderDraftRestart" type="button" data-i18n="builder_draft_restart">Начать заново</button>
+        <button class="btn btn-primary" id="builderDraftContinue" type="button" data-i18n="builder_draft_continue">Продолжить черновик</button>
+      </div>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.14"></script>
-  <script src="js/data-default.js?v=2.14"></script>
-  <script src="js/state.js?v=2.14"></script>
-  <script src="js/dom.js?v=2.14"></script>
-  <script src="js/helpers.js?v=2.14"></script>
-  <script src="js/sync.js?v=2.14"></script>
-  <script src="js/auth.js?v=2.14"></script>
-  <script src="js/ai-providers.js?v=2.14"></script>
-  <script src="js/ai-studio.js?v=2.14"></script>
-  <script src="js/ui-settings.js?v=2.14"></script>
-  <script src="js/vocab.js?v=2.14"></script>
-  <script src="js/stories.js?v=2.14"></script>
-  <script src="js/lessons.js?v=2.14"></script>
-  <script src="js/import.js?v=2.14"></script>
-  <script src="js/app.js?v=2.14"></script>
+  <script src="js/config.js?v=2.19"></script>
+  <script src="js/data-default.js?v=2.19"></script>
+  <script src="js/state.js?v=2.19"></script>
+  <script src="js/dom.js?v=2.19"></script>
+  <script src="js/helpers.js?v=2.19"></script>
+  <script src="js/sync.js?v=2.19"></script>
+  <script src="js/auth.js?v=2.19"></script>
+  <script src="js/ai-providers.js?v=2.19"></script>
+  <script src="js/ai-studio.js?v=2.19"></script>
+  <script src="js/ui-settings.js?v=2.19"></script>
+  <script src="js/vocab.js?v=2.19"></script>
+  <script src="js/stories.js?v=2.19"></script>
+  <script src="js/lessons.js?v=2.19"></script>
+  <script src="js/import.js?v=2.19"></script>
+  <script src="js/builder.js?v=2.19"></script>
+  <script src="js/app.js?v=2.19"></script>
   <script src="js/reveal.js" defer></script>
 </body>
 </html>

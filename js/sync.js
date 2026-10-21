@@ -134,7 +134,7 @@
       try {
         for (let index = 0; index < window.localStorage.length; index += 1) {
           const key = window.localStorage.key(index);
-          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX) || key.startsWith("lingua_cloud_")) continue;
+          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX) || key.startsWith("lingua_builder_draft_") || key.startsWith("lingua_cloud_")) continue;
           const raw = window.localStorage.getItem(key);
           if (raw == null) continue;
           try {
@@ -171,7 +171,7 @@
     }
 
     function collectionLanguage(key) {
-      const match = /^lingua_(.+)_vocab$/.exec(key);
+      const match = /^lingua_(.+)_(vocab|imported_lessons|imported_stories)$/.exec(key);
       return match ? match[1] : "";
     }
 
@@ -182,7 +182,54 @@
       if (key.endsWith("_vocab")) {
         return findTombstone("word", { language: collectionLanguage(key), id: item.id });
       }
+      if (key.endsWith("_imported_lessons")) {
+        return findTombstone("lesson", { language: collectionLanguage(key), id: item.id });
+      }
+      if (key.endsWith("_imported_stories")) {
+        return findTombstone("story", { language: collectionLanguage(key), id: item.id });
+      }
       return null;
+    }
+
+    function normalizeHiddenEntry(value, fallbackAt) {
+      if (value === true) return { hidden: true, at: String(fallbackAt || "") };
+      if (!value || typeof value !== "object") return null;
+      return { hidden: Boolean(value.hidden), at: String(value.at || fallbackAt || "") };
+    }
+
+    function normalizeHiddenBucket(bucket, fallbackAt) {
+      const normalized = {};
+      if (!bucket || typeof bucket !== "object") return normalized;
+      Object.entries(bucket).forEach(([id, value]) => {
+        const entry = normalizeHiddenEntry(value, fallbackAt);
+        if (entry) normalized[String(id)] = entry;
+      });
+      return normalized;
+    }
+
+    function mergeHiddenContent(localValue, remoteValue) {
+      const local = localValue && typeof localValue === "object" ? localValue : {};
+      const remote = remoteValue && typeof remoteValue === "object" ? remoteValue : {};
+      const localAt = String(local.updated_at || "");
+      const remoteAt = String(remote.updated_at || "");
+      const mergeBucket = (name) => {
+        const localBucket = normalizeHiddenBucket(local[name], localAt);
+        const remoteBucket = normalizeHiddenBucket(remote[name], remoteAt);
+        const result = {};
+        new Set([...Object.keys(localBucket), ...Object.keys(remoteBucket)]).forEach((id) => {
+          const left = localBucket[id];
+          const right = remoteBucket[id];
+          if (!left) result[id] = right;
+          else if (!right) result[id] = left;
+          else result[id] = timestampValue(right.at) > timestampValue(left.at) ? right : left;
+        });
+        return result;
+      };
+      return {
+        lessons: mergeBucket("lessons"),
+        stories: mergeBucket("stories"),
+        updated_at: timestampValue(remoteAt) > timestampValue(localAt) ? remoteAt : localAt
+      };
     }
 
     function mergeCloudCollection(key, localItems, remoteItems) {
@@ -259,10 +306,12 @@
         }
         Object.entries(payload.values).forEach(([key, value]) => {
           if (key === DELETED_KEY) return;
-          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX)) return;
+          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key.startsWith("lingua_builder_draft_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX)) return;
           let nextValue = value;
           if (key === UI_SETTINGS_KEY) {
             nextValue = mergeSettingsValue(readJSON(key, null), value);
+          } else if (key === HIDDEN_CONTENT_KEY) {
+            nextValue = mergeHiddenContent(readJSON(key, null), value);
           } else if (isProgressKey(key)) {
             nextValue = mergeProgressValue(readJSON(key, null), value);
           } else if (/_(vocab|imported_lessons|imported_stories)$/.test(key) || key === CUSTOM_LANGUAGES_KEY) {
@@ -326,6 +375,7 @@
       }
       const pending = cloudPendingRefresh;
       cloudPendingRefresh = null;
+      const previousScroll = window.scrollY;
       if (pending.languageLists) {
         renderLanguageLists();
         if (typeof syncLanguageUI === "function") syncLanguageUI();
@@ -333,6 +383,9 @@
       if (pending.render === "dashboard" && state.view === "dashboard") renderDashboard();
       else if (pending.render === "stories" && state.view === "stories") renderStoriesHub();
       else if (pending.render === "vocabulary" && state.view === "vocabulary") renderVocabularyHub();
+      if (pending.render && state.view !== "lesson" && state.view !== "story") {
+        window.requestAnimationFrame(() => window.scrollTo(0, previousScroll));
+      }
     }
 
     function queueCloudRefresh(keys, options = {}) {
@@ -431,9 +484,10 @@
       const vocabKey = current ? `lingua_${current}_vocab` : "";
       const importedLessonKey = current ? importedLessonsKey() : "";
       const importedStoryKey = current ? importedStoriesKey() : "";
-      const vocabChanged = Boolean(vocabKey && keySet.has(vocabKey)) || keySet.has(DELETED_KEY);
-      const lessonsChanged = Boolean(importedLessonKey && keySet.has(importedLessonKey));
-      const storiesChanged = Boolean(importedStoryKey && keySet.has(importedStoryKey));
+      const deletedChanged = keySet.has(DELETED_KEY);
+      const vocabChanged = Boolean(vocabKey && keySet.has(vocabKey)) || deletedChanged;
+      const lessonsChanged = Boolean(importedLessonKey && keySet.has(importedLessonKey)) || deletedChanged;
+      const storiesChanged = Boolean(importedStoryKey && keySet.has(importedStoryKey)) || deletedChanged;
       const hiddenChanged = keySet.has(HIDDEN_CONTENT_KEY);
 
       if (vocabChanged) {
@@ -606,10 +660,8 @@
           const change = payload ? applyCloudPayload(payload) : { changed: false, keys: [] };
           const remoteFingerprint = payload ? payloadFingerprint(payload.values) : "";
           const isOwnPush = Boolean(remoteFingerprint && cloudLastPushFingerprint && remoteFingerprint === cloudLastPushFingerprint);
-          if (change.changed) {
-            if (!isOwnPush) {
-              showToast(t("sync_updated_remote"), "info");
-            }
+          if (change.changed && !isOwnPush) {
+            showToast(t("sync_updated_remote"), "info");
             refreshAfterCloudApply(change);
           }
           let pushOK = true;

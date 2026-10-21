@@ -99,18 +99,18 @@
     let errorQuizState = null;
 
     function getVisibleLessons() {
-      return applyHiddenFlags("lesson", state.lessons.filter((lesson) => !isContentDeleted("lesson", lesson.id)))
+      return applyHiddenFlags("lesson", state.lessons.filter((lesson) => !isContentDeleted("lesson", lesson.id, lesson.updated_at)))
         .filter((lesson) => showHiddenLessons || !lesson.is_hidden);
     }
 
     function getHiddenLessonCount() {
-      return state.lessons.filter((lesson) => isContentHidden("lesson", lesson.id) && !isContentDeleted("lesson", lesson.id)).length;
+      return state.lessons.filter((lesson) => isContentHidden("lesson", lesson.id) && !isContentDeleted("lesson", lesson.id, lesson.updated_at)).length;
     }
 
     function lessonActionMarkup(lesson) {
       const imported = state.importedLessons.some((item) => Number(item.id) === Number(lesson.id));
       if (imported) {
-        return `<button class="content-action is-danger" type="button" data-delete-lesson="${Number(lesson.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
+        return `<button class="content-action" type="button" data-edit-lesson="${Number(lesson.id)}" data-i18n-aria="builder_edit_lesson" aria-label="${escapeHtml(t("builder_edit_lesson"))}">✎</button><button class="content-action is-danger" type="button" data-delete-lesson="${Number(lesson.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
       }
       return lesson.is_hidden
         ? `<button class="content-action" type="button" data-show-lesson="${Number(lesson.id)}" data-i18n-aria="show_item" aria-label="${escapeHtml(t("show_item"))}">👁</button>`
@@ -125,20 +125,21 @@
       state.lessons = mergeById(state.languagePack?.lessons || [], state.importedLessons);
       addTombstone("lesson", { id: String(lessonId), language: state.language });
       showToast(t("lesson_deleted"), "success");
-      renderDashboard();
+      removeDashboardLessonCard(lessonId);
     }
 
     function hideLesson(lessonId) {
       setContentHidden("lesson", lessonId, true);
       showHiddenLessons = false;
       showToast(t("lesson_hidden"), "info");
-      renderDashboard();
+      removeDashboardLessonCard(lessonId);
     }
 
     function showLesson(lessonId) {
       setContentHidden("lesson", lessonId, false);
       showToast(t("lesson_shown"), "info");
-      renderDashboard();
+      refreshDashboardLessonCard(lessonId);
+      updateDashboardSummary();
     }
 
     document.addEventListener("click", (event) => {
@@ -204,6 +205,137 @@
       };
     }
 
+    function renderDashboardStatsMarkup(stats) {
+      return `
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LEXICON</span></div>
+          <div><div class="stat-value" data-dashboard-stat="words">${stats.words}</div><span class="stat-label">${escapeHtml(t("words_learned"))}</span></div>
+        </div>
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">QUIZZES</span></div>
+          <div><div class="stat-value" data-dashboard-stat="quizzes">${stats.quizzes}<small>${escapeHtml(t("total"))} ${stats.quizzesTotal}</small></div><span class="stat-label">${escapeHtml(t("quizzes_passed"))}</span></div>
+        </div>
+        <div class="stat-card reveal active">
+          <div class="stat-top"><span class="stat-icon">${icon("terminal")}</span><span class="stat-code">COURSE</span></div>
+          <div><div class="stat-value" data-dashboard-stat="completion">${stats.completion}<small>%</small></div><span class="stat-label">${escapeHtml(t("course_complete"))}</span></div>
+        </div>
+      `;
+    }
+
+    function renderDashboardCourseLines(stats) {
+      return stats.cards.map((item, index) => `
+        <div class="course-line">
+          <span class="course-line-label"><span>${pad(index + 1)}</span>${escapeHtml(item.lesson.title)}</span>
+          <strong>${item.metrics.percent}%</strong>
+          <div class="course-line-track"><span style="width:${item.metrics.percent}%"></span></div>
+        </div>
+      `).join("");
+    }
+
+    function updateDashboardSummary() {
+      if (state.view !== "dashboard") return;
+      const stats = getCourseStats();
+      const hiddenLessonCount = getHiddenLessonCount();
+      const visibleLessons = stats.cards.map((item) => item.lesson);
+      const languageName = languageLabel(currentLanguage());
+      const ring = document.querySelector(".dashboard .course-ring");
+      if (ring) {
+        ring.style.setProperty("--p", stats.completion);
+        const ringValue = ring.querySelector("strong");
+        if (ringValue) ringValue.textContent = `${stats.completion}%`;
+      }
+      const summaryCopy = document.querySelector(".dashboard .course-summary-copy");
+      if (summaryCopy) {
+        const status = summaryCopy.querySelector("strong");
+        if (status) status.textContent = stats.completion === 0 ? t("ready") : stats.completion >= 100 ? t("complete") : t("in_progress");
+        const detail = summaryCopy.querySelector("p");
+        if (detail) detail.textContent = `${stats.words} ${t("words")} · ${stats.quizzes}/${stats.quizzesTotal} ${t("quizzes_passed")}`;
+      }
+      const courseLines = document.querySelector(".dashboard .course-lines");
+      if (courseLines) courseLines.innerHTML = renderDashboardCourseLines(stats);
+      const statHost = document.querySelector(".dashboard .dashboard-stats");
+      if (statHost) statHost.innerHTML = renderDashboardStatsMarkup(stats);
+      const eyebrowLevel = document.querySelector(".dashboard-hero .eyebrow-level");
+      if (eyebrowLevel) eyebrowLevel.textContent = `${visibleLessons.length} ${t("modules").toUpperCase()}`;
+      const modulesKicker = document.querySelector(".dashboard .modules-kicker");
+      if (modulesKicker) modulesKicker.textContent = `MODULES / ${pad(visibleLessons.length)}`;
+      const modulesCount = document.querySelector(".dashboard .modules-count");
+      if (modulesCount) {
+        const started = stats.cards.filter((item) => item.metrics.percent > 0).length;
+        modulesCount.textContent = `${started} ${t("started")} · ${visibleLessons.length} ${t("total")}`;
+      }
+      const tools = document.querySelector(".dashboard .modules-head-tools");
+      if (tools) {
+        let toggle = tools.querySelector("[data-toggle-hidden-lessons]");
+        if (hiddenLessonCount || showHiddenLessons) {
+          if (!toggle) {
+            toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "btn btn-quiet content-hidden-toggle";
+            toggle.dataset.toggleHiddenLessons = "";
+            tools.appendChild(toggle);
+          }
+          toggle.textContent = showHiddenLessons ? t("hidden_hide") : t("hidden_show", { n: hiddenLessonCount });
+        } else if (toggle) {
+          toggle.remove();
+        }
+      }
+      const grid = document.querySelector(".dashboard .lesson-grid");
+      if (grid) {
+        const empty = grid.querySelector(".dashboard-empty");
+        if (!stats.cards.length && !empty) {
+          grid.innerHTML = `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(t("no_lessons_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`;
+        } else if (stats.cards.length && empty) {
+          empty.remove();
+        }
+      }
+      topbarContext.textContent = `${currentLanguage()} / ${pad(visibleLessons.length)} modules`;
+      progressValue.textContent = pad(stats.completion);
+      topProgressBar.style.width = `${stats.completion}%`;
+      const topbarProgress = document.getElementById("topbarProgress");
+      if (topbarProgress) topbarProgress.setAttribute("aria-label", `Курс завершён на ${stats.completion}%`);
+      const footerMeta = document.getElementById("footerMeta");
+      if (footerMeta) footerMeta.textContent = `${currentLanguage()} / ${visibleLessons.length} modules · v2.8`;
+    }
+
+    function refreshDashboardLessonCard(lessonId) {
+      const card = document.querySelector(`.dash-lesson[data-lesson-id="${Number(lessonId)}"]`);
+      if (!card) return;
+      const stats = getCourseStats();
+      const index = stats.cards.findIndex((item) => Number(item.lesson.id) === Number(lessonId));
+      if (index < 0) {
+        removeDashboardLessonCard(lessonId);
+        return;
+      }
+      card.outerHTML = renderLessonCard(stats.cards[index], index);
+      document.querySelector(`.dash-lesson[data-lesson-id="${Number(lessonId)}"]`)?.classList.add("active");
+    }
+
+    function removeDashboardLessonCard(lessonId) {
+      const card = document.querySelector(`.dash-lesson[data-lesson-id="${Number(lessonId)}"]`);
+      updateDashboardSummary();
+      if (!card) return;
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      if (reduce || typeof card.animate !== "function") {
+        card.remove();
+        return;
+      }
+      card.style.pointerEvents = "none";
+      const animation = card.animate(
+        [{ opacity: 1, transform: "translateY(0)" }, { opacity: 0, transform: "translateY(-8px)" }],
+        { duration: 160, easing: "ease-out" }
+      );
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        card.remove();
+      };
+      window.setTimeout(finish, 220);
+      if (animation?.finished?.then) animation.finished.then(finish).catch(finish);
+      else finish();
+    }
+
     /* ---------- markup fragments ---------- */
     function getTitleParts(lesson) {
       if (Array.isArray(lesson.title_parts) && lesson.title_parts.length >= 2) {
@@ -247,6 +379,8 @@
                 ${escapeHtml(t("lesson_practice"))} ${icon("arrow-right")}
               </a>
               <button class="btn btn-quiet" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("lesson_import"))}</button>
+              <button class="btn btn-quiet" type="button" data-copy-lesson-json>📋 ${escapeHtml(t("builder_copy_json"))}</button>
+              ${state.importedLessons.some((item) => Number(item.id) === Number(lesson.id)) ? `<button class="btn btn-secondary" type="button" data-edit-lesson="${Number(lesson.id)}">✎ ${escapeHtml(t("builder_edit_lesson"))}</button>` : ""}
             </div>
             <div class="hero-metrics" aria-label="${escapeHtml(t("lesson_map"))}">
               <div class="metric"><strong>${pad(blocks.length)}</strong><span>${escapeHtml(t("blocks"))}</span></div>
@@ -362,7 +496,7 @@
       const tags = [...new Set(blocks.map((block) => (TYPE_META[block.type] || {}).tag).filter(Boolean))];
       const launchLabel = metrics.percent > 0 ? t("continue_learning") : t("lesson_start");
       return `
-        <article class="dash-lesson reveal" style="--i:${index}" aria-labelledby="dashboard-lesson-${lesson.id}">
+        <article class="dash-lesson reveal" data-lesson-id="${Number(lesson.id)}" style="--i:${index}" aria-labelledby="dashboard-lesson-${lesson.id}">
           <div class="lesson-card-top">
             <span class="lesson-module">${escapeHtml(lesson.module || `MODULE ${pad(index + 1)}`)}</span>
             <div class="lesson-badges">
@@ -445,6 +579,7 @@
                 : escapeHtml(t("dashboard_subtitle", { lang: languageName }))}</p>
               <div class="dashboard-actions">
                 ${next ? `<a class="btn btn-primary" href="#lesson-${Number(next.lesson.id)}">${escapeHtml(nextLabel)} ${icon("arrow-right")}</a>` : ""}
+                <button class="btn btn-secondary" type="button" data-create-lesson>${icon("plus")} ${escapeHtml(t("builder_create_lesson"))}</button>
                 <button class="btn btn-secondary" type="button" data-section-link="stories">${escapeHtml(t("free_reading"))} ${icon("spark")}</button>
                 <button class="btn btn-quiet" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button>
               </div>
@@ -484,17 +619,17 @@
           </div>
 
           <div class="dashboard-stats" aria-label="${escapeHtml(t("course_status"))}">
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LEXICON</span></div>
-              <div><div class="stat-value">${stats.words}</div><span class="stat-label">${escapeHtml(t("words_learned"))}</span></div>
+              <div><div class="stat-value" data-dashboard-stat="words">${stats.words}</div><span class="stat-label">${escapeHtml(t("words_learned"))}</span></div>
             </div>
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">QUIZZES</span></div>
-              <div><div class="stat-value">${stats.quizzes}<small>${escapeHtml(t("total"))} ${stats.quizzesTotal}</small></div><span class="stat-label">${escapeHtml(t("quizzes_passed"))}</span></div>
+              <div><div class="stat-value" data-dashboard-stat="quizzes">${stats.quizzes}<small>${escapeHtml(t("total"))} ${stats.quizzesTotal}</small></div><span class="stat-label">${escapeHtml(t("quizzes_passed"))}</span></div>
             </div>
-            <div class="stat-card reveal">
+            <div class="stat-card reveal active">
               <div class="stat-top"><span class="stat-icon">${icon("terminal")}</span><span class="stat-code">COURSE</span></div>
-              <div><div class="stat-value">${stats.completion}<small>%</small></div><span class="stat-label">${escapeHtml(t("course_complete"))}</span></div>
+              <div><div class="stat-value" data-dashboard-stat="completion">${stats.completion}<small>%</small></div><span class="stat-label">${escapeHtml(t("course_complete"))}</span></div>
             </div>
           </div>
 
@@ -863,7 +998,7 @@
                 <div class="chat-date">${escapeHtml(block.date_label || "Today")}</div>
                 ${messages.map((message, messageIndex) => {
                   const person = byId[message.from] || { name: message.from || "Unknown", initials: "?", tone: "cyan" };
-                  const isMe = message.from === viewer;
+                  const isMe = message.side ? message.side === "right" : message.from === viewer;
                   return `
                     <div class="message${isMe ? " is-me" : ""}" style="--m:${messageIndex}">
                       ${!isMe ? `<span class="avatar${person.tone === "emerald" ? " tone-emerald" : ""}" aria-hidden="true">${escapeHtml(person.initials || "?")}</span>` : ""}

@@ -68,17 +68,31 @@
     }
 
     function addImportedVocabulary(items) {
-      const incoming = normalizeVocabularyList(items).map((word) => ({
-        ...word,
-        updated_at: new Date().toISOString()
-      }));
+      const language = state.language;
+      const now = new Date().toISOString();
+      const incoming = normalizeVocabularyList(items);
       let added = 0;
       let updated = 0;
-      incoming.forEach((word) => {
-        const byContent = state.vocab.find((item) => item.word.toLocaleLowerCase(currentLanguage()) === word.word.toLocaleLowerCase(currentLanguage())
-          && item.translation.toLocaleLowerCase("ru") === word.translation.toLocaleLowerCase("ru"));
-        if (byContent) {
-          Object.assign(byContent, word, { id: byContent.id });
+      let invalid = 0;
+      incoming.forEach((rawWord) => {
+        const cleaned = cleanWordForSave(rawWord.word, language);
+        if (!cleaned) {
+          invalid += 1;
+          return;
+        }
+        const word = {
+          ...rawWord,
+          word: cleaned,
+          created_at: rawWord.created_at || now,
+          updated_at: now
+        };
+        const key = wordKey(cleaned, language);
+        const existing = state.vocab.find((item) => wordKey(item.word, language) === key);
+        if (existing) {
+          const cleanedExisting = cleanWordForSave(existing.word, language);
+          if (cleanedExisting) existing.word = cleanedExisting;
+          mergeWordData(existing, word);
+          existing.updated_at = now;
           updated += 1;
           return;
         }
@@ -87,8 +101,8 @@
         state.vocab.push(word);
         added += 1;
       });
-      if (incoming.length) saveVocabulary();
-      return { added, updated };
+      if (added || updated) saveVocabulary();
+      return { added, updated, invalid };
     }
 
     function addImportedLessons(items) {
@@ -98,6 +112,7 @@
       items.forEach((raw, index) => {
         const lesson = normalizeImportedLesson(raw, nextLessonId() + index);
         if (!lesson) return;
+        lesson.updated_at = new Date().toISOString();
         if (state.lessons.some((item) => Number(item.id) === Number(lesson.id))) updated += 1;
         else added += 1;
         imported.set(Number(lesson.id), lesson);
@@ -115,6 +130,7 @@
       items.forEach((raw, index) => {
         const story = normalizeImportedStory(raw, nextStoryId() + index);
         if (!story) return;
+        story.updated_at = new Date().toISOString();
         if (state.stories.some((item) => Number(item.id) === Number(story.id))) updated += 1;
         else added += 1;
         imported.set(Number(story.id), story);
@@ -172,6 +188,7 @@
       const result = {
         vocabAdded: 0,
         vocabUpdated: 0,
+        vocabInvalid: 0,
         lessonsAdded: 0,
         lessonsUpdated: 0,
         storiesAdded: 0,
@@ -182,6 +199,7 @@
         const vocabResult = addImportedVocabulary(vocabItems);
         result.vocabAdded = vocabResult.added;
         result.vocabUpdated = vocabResult.updated;
+        result.vocabInvalid = vocabResult.invalid;
       }
       if (lessonItems.length) {
         const lessonResult = addImportedLessons(lessonItems);
@@ -195,6 +213,7 @@
       }
 
       if (!result.vocabAdded && !result.vocabUpdated && !result.lessonsAdded && !result.lessonsUpdated && !result.storiesAdded && !result.storiesUpdated) {
+        if (vocabItems.length && result.vocabInvalid) throw new Error(t("vocab_word_invalid"));
         throw new Error("JSON распознан, но элементы не прошли проверку. Проверь обязательные поля.");
       }
       return result;
@@ -309,6 +328,8 @@
         const result = importPayload(payload);
         const parts = [];
         if (result.vocabAdded || result.vocabUpdated) parts.push(`слов: +${result.vocabAdded}${result.vocabUpdated ? ` / обновлено ${result.vocabUpdated}` : ""}`);
+        if (result.vocabUpdated) parts.push(t("vocab_merged"));
+        if (result.vocabInvalid) parts.push(t("vocab_invalid_skipped", { n: result.vocabInvalid }));
         if (result.lessonsAdded || result.lessonsUpdated) parts.push(`уроков: +${result.lessonsAdded}${result.lessonsUpdated ? ` / обновлено ${result.lessonsUpdated}` : ""}`);
         if (result.storiesAdded || result.storiesUpdated) parts.push(`историй: +${result.storiesAdded}${result.storiesUpdated ? ` / обновлено ${result.storiesUpdated}` : ""}`);
         const message = `Импорт завершён · ${parts.join(" · ")}`;
