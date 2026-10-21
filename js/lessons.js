@@ -362,7 +362,7 @@
       const tags = [...new Set(blocks.map((block) => (TYPE_META[block.type] || {}).tag).filter(Boolean))];
       const launchLabel = metrics.percent > 0 ? t("continue_learning") : t("lesson_start");
       return `
-        <article class="dash-lesson" style="--i:${index}" aria-labelledby="dashboard-lesson-${lesson.id}">
+        <article class="dash-lesson reveal" style="--i:${index}" aria-labelledby="dashboard-lesson-${lesson.id}">
           <div class="lesson-card-top">
             <span class="lesson-module">${escapeHtml(lesson.module || `MODULE ${pad(index + 1)}`)}</span>
             <div class="lesson-badges">
@@ -484,15 +484,15 @@
           </div>
 
           <div class="dashboard-stats" aria-label="${escapeHtml(t("course_status"))}">
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LEXICON</span></div>
               <div><div class="stat-value">${stats.words}</div><span class="stat-label">${escapeHtml(t("words_learned"))}</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">QUIZZES</span></div>
               <div><div class="stat-value">${stats.quizzes}<small>${escapeHtml(t("total"))} ${stats.quizzesTotal}</small></div><span class="stat-label">${escapeHtml(t("quizzes_passed"))}</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("terminal")}</span><span class="stat-code">COURSE</span></div>
               <div><div class="stat-value">${stats.completion}<small>%</small></div><span class="stat-label">${escapeHtml(t("course_complete"))}</span></div>
             </div>
@@ -755,7 +755,7 @@
 
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="theory" style="--i:${index}" aria-labelledby="block-title-${number}">
-          <div class="card theory-card">
+          <div class="card reveal theory-card">
             ${blockHead(block, index)}
             <div class="terminal" role="figure" aria-label="${escapeHtml(block.terminal_label || "Грамматическое правило")}">
               <div class="terminal-bar">
@@ -815,7 +815,7 @@
       // inline <span class="vocab"> glossary markup.
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="reading_heavy" style="--i:${index}" aria-labelledby="block-title-${number}">
-          <div class="card reading-card">
+          <div class="card reveal reading-card">
             ${blockHead(block, index)}
             ${block.intro ? `<p class="reading-intro">${escapeHtml(block.intro)}</p>` : ""}
             <div class="reading-toolbar">
@@ -845,7 +845,7 @@
 
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="dialogue" style="--i:${index}" aria-labelledby="block-title-${number}">
-          <div class="card dialogue-card">
+          <div class="card reveal dialogue-card">
             ${blockHead(block, index)}
             ${block.intro ? `<p class="dialogue-intro">${escapeHtml(block.intro)}</p>` : ""}
             <div class="messenger">
@@ -904,7 +904,7 @@
       const letters = ["A", "B", "C", "D", "E"];
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="quiz" style="--i:${index}" aria-labelledby="block-title-${number}">
-          <div class="card quiz-card" data-quiz data-lesson-id="${Number(state.lesson?.id) || 1}" data-block-index="${index}">
+          <div class="card reveal quiz-card" data-quiz data-lesson-id="${Number(state.lesson?.id) || 1}" data-block-index="${index}">
             ${blockHead(block, index)}
             ${block.intro ? `<p class="quiz-intro">${escapeHtml(block.intro)}</p>` : ""}
             <div class="quiz-status">
@@ -965,7 +965,7 @@
 
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="practice_write" style="--i:${index}" aria-labelledby="block-title-${number}">
-          <div class="card practice-card">
+          <div class="card reveal practice-card">
             ${blockHead(block, index)}
             <div class="practice-top">
               <div>
@@ -1045,7 +1045,7 @@
         default:
           return `
             <section class="lesson-block" id="block-${number}" data-block-index="${index}" style="--i:${index}">
-              <div class="card">
+              <div class="card reveal">
                 <div class="block-eyebrow">UNKNOWN BLOCK</div>
                 <h2>${escapeHtml(block.title || block.type || "Блок")}</h2>
                 <p class="theory-body">Этот тип контента пока не поддерживается движком.</p>

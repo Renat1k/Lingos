@@ -671,15 +671,15 @@
           </div>
 
           <div class="dashboard-stats" aria-label="Статистика словаря">
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("vault")}</span><span class="stat-code">ENTRIES</span></div>
               <div><div class="stat-value" id="vocabStatTotal">${total}</div><span class="stat-label">${escapeHtml(t("words"))}</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">STARRED</span></div>
               <div><div class="stat-value"><span id="vocabStatFavorites">${favorites}</span><small>${escapeHtml(t("total"))} ${total}</small></div><span class="stat-label">${escapeHtml(t("starred"))}</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("spark")}</span><span class="stat-code">TAGS</span></div>
               <div><div class="stat-value" id="vocabStatTags">${tags.length}</div><span class="stat-label">${escapeHtml(t("tags"))}</span></div>
             </div>

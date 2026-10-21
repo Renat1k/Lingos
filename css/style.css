@@ -6264,3 +6264,323 @@
       from { opacity: 0; transform: translateY(12px) scale(0.985); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
+
+
+    /* ============================================================
+       PREMIUM LAYER v2 · appended, non-destructive
+       Правила ниже переопределяют базу по каскаду (в конце файла).
+       Переменные и темы (cyber / hacker / nordic / glass) не тронуты.
+       Для hover/float используются индивидуальные свойства
+       `scale` и `translate`, потому что у карточек уже есть
+       animation (rise-in, fill-mode: both), которая удерживает
+       `transform` и перебила бы transform в :hover.
+       ============================================================ */
+    :root {
+      --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
+      --glass-border: rgba(var(--accent-rgb), 0.18);
+      --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+      --glow-soft: 0 0 0 1px rgba(var(--accent-rgb), 0.22), 0 18px 60px -22px rgba(var(--accent-rgb), 0.5);
+      --float-distance: 5px;
+    }
+
+    /* ---------- 1. Typography ---------- */
+    body {
+      font-feature-settings: "kern", "liga", "calt", "ss01";
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    h1, h2, h3, h4 {
+      text-wrap: balance;
+      font-feature-settings: "kern", "liga";
+    }
+    h1 { letter-spacing: -0.035em; line-height: 1.04; }
+    h2 { letter-spacing: -0.025em; line-height: 1.12; }
+    h3 { letter-spacing: -0.018em; line-height: 1.2; }
+    p, li, .lesson-description, .reading-prose { text-wrap: pretty; }
+    .reading-prose, .theory-body { line-height: 1.72; letter-spacing: 0.002em; }
+    .mono, code, kbd, pre, .stat-code, .lesson-module, .block-eyebrow {
+      font-variant-ligatures: none;
+      font-feature-settings: "zero", "ss02";
+    }
+    .stat-value, .test-score, .course-ring strong, .toc-num, .block-index {
+      font-variant-numeric: tabular-nums lining-nums;
+    }
+    ::selection { background: rgba(var(--accent-rgb), 0.34); color: #fff; text-shadow: none; }
+
+    /* ---------- 2. Scrollbars ---------- */
+    * { scrollbar-width: thin; scrollbar-color: rgba(var(--accent-rgb), 0.38) transparent; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.42), rgba(var(--accent-deep-rgb), 0.28));
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background-clip: padding-box;
+      transition: background 0.2s ease;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.7), rgba(var(--accent-deep-rgb), 0.5));
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-corner { background: transparent; }
+
+    /* ---------- 3. Glass surfaces ---------- */
+    .card,
+    .dash-lesson,
+    .story-card,
+    .stat-card,
+    .side-card,
+    .test-card,
+    .practice-card,
+    .glass {
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow-card), var(--glass-highlight);
+      -webkit-backdrop-filter: blur(26px) saturate(155%);
+      backdrop-filter: blur(26px) saturate(155%);
+    }
+    .card::before,
+    .dash-lesson::before,
+    .story-card::before {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22) 30%, rgba(var(--accent-rgb), 0.5) 55%, transparent 92%);
+      opacity: 0.9;
+    }
+    /* мягкий «глянцевый» блик по верхнему краю карточки */
+    .card::after,
+    .dash-lesson::after,
+    .story-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 38%);
+      mix-blend-mode: screen;
+    }
+    .card > *, .dash-lesson > *, .story-card > * { position: relative; z-index: 1; }
+
+    .topbar {
+      -webkit-backdrop-filter: blur(28px) saturate(170%);
+      backdrop-filter: blur(28px) saturate(170%);
+      border-bottom: 1px solid rgba(var(--accent-rgb), 0.12);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 50px -34px rgba(0, 0, 0, 0.8);
+    }
+
+    /* модалки: полупрозрачная граница + глубокий blur подложки */
+    .settings-modal::backdrop,
+    .profile-modal::backdrop,
+    .import-modal::backdrop,
+    .language-modal::backdrop,
+    .course-modal::backdrop,
+    .word-modal::backdrop,
+    .review-modal::backdrop,
+    .ai-studio-modal::backdrop {
+      background: radial-gradient(ellipse at 50% 30%, rgba(var(--accent-deep-rgb), 0.16), rgba(2, 4, 6, 0.78) 70%);
+      -webkit-backdrop-filter: blur(18px) saturate(130%);
+      backdrop-filter: blur(18px) saturate(130%);
+    }
+    .settings-panel,
+    .profile-panel,
+    .import-panel,
+    .language-panel,
+    .course-panel,
+    .word-panel,
+    .ai-sheet,
+    .confirm-panel {
+      border: 1px solid rgba(var(--accent-rgb), 0.24);
+      box-shadow:
+        0 60px 160px -30px rgba(0, 0, 0, 0.92),
+        0 0 90px -40px rgba(var(--accent-rgb), 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      -webkit-backdrop-filter: blur(36px) saturate(165%);
+      backdrop-filter: blur(36px) saturate(165%);
+    }
+
+    /* ---------- 4. Apple scroll reveal ---------- */
+    .reveal {
+      opacity: 0;
+      transform: translate3d(0, 32px, 0) scale(0.985);
+      transition:
+        opacity 0.9s var(--ease-apple),
+        transform 0.9s var(--ease-apple);
+      transition-delay: calc(var(--reveal-i, 0) * 70ms);
+      will-change: opacity, transform;
+    }
+    .reveal.active {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+      will-change: auto;
+    }
+    /* элементы, у которых уже есть собственная rise-in, не должны получать двойную анимацию */
+    .reveal.dash-lesson, .reveal.story-card, .reveal.stat-card, .reveal.lesson-block { animation: none; }
+    /* без JS контент не прячем */
+    html:not(.js) .reveal { opacity: 1; transform: none; }
+
+    /* ---------- 5. Floating (едва заметное парение) ---------- */
+    @keyframes float {
+      0%, 100% { translate: 0 0; }
+      50% { translate: 0 calc(var(--float-distance) * -1); }
+    }
+    @keyframes float-soft {
+      0%, 100% { translate: 0 0; rotate: 0deg; }
+      33% { translate: 1px -3px; rotate: -0.6deg; }
+      66% { translate: -1px -5px; rotate: 0.6deg; }
+    }
+    .brand-mark { animation: float 6s ease-in-out infinite; will-change: translate; }
+    .hero-visual { animation: rise-in 0.9s 0.16s var(--ease) both, float 9s 1.2s ease-in-out infinite; --float-distance: 8px; }
+    .stat-icon,
+    .toc-ring,
+    .course-flag,
+    .flag-mark,
+    .gemini-model-badge,
+    .level-badge,
+    .lesson-badge,
+    .toc-mark.is-active,
+    .icon.is-active,
+    .is-active > .icon {
+      animation: float-soft 7s ease-in-out infinite;
+      --float-distance: 3px;
+    }
+    .stat-card:nth-child(2) .stat-icon { animation-delay: -2s; }
+    .stat-card:nth-child(3) .stat-icon { animation-delay: -4s; }
+    .lesson-badge { animation-delay: -1.5s; }
+    .level-badge { animation-delay: -3.2s; }
+    .brand-mark:hover { animation-play-state: paused; }
+
+    /* ---------- 6. Micro-interactions (hover / touch) ---------- */
+    .dash-lesson,
+    .story-card,
+    .stat-card,
+    .vocab-item,
+    .test-card,
+    .language-choice,
+    .theme-choice,
+    .settings-choice,
+    .quiz-option,
+    .phrase-chip,
+    .btn,
+    .icon-btn {
+      transition:
+        scale 0.45s var(--ease-apple),
+        translate 0.45s var(--ease-apple),
+        box-shadow 0.45s var(--ease-apple),
+        border-color 0.3s ease,
+        background 0.4s ease,
+        color 0.25s ease,
+        filter 0.3s ease;
+    }
+    .dash-lesson, .story-card, .vocab-item, .test-card { cursor: pointer; }
+
+    @media (hover: hover) and (pointer: fine) {
+      .dash-lesson:hover,
+      .story-card:hover,
+      .vocab-item:hover,
+      .test-card:hover {
+        scale: 1.02;
+        border-color: rgba(var(--accent-rgb), 0.42);
+        box-shadow: var(--glow-soft), var(--glass-highlight);
+        background-image: linear-gradient(155deg, rgba(var(--accent-rgb), 0.09), rgba(var(--accent2-rgb), 0.05) 55%, transparent);
+        z-index: 2;
+      }
+      .stat-card:hover {
+        scale: 1.02;
+        border-color: rgba(var(--accent-rgb), 0.36);
+        box-shadow: var(--glow-soft), var(--glass-highlight);
+      }
+      .quiz-option:hover,
+      .language-choice:hover,
+      .theme-choice:hover,
+      .settings-choice:hover {
+        scale: 1.015;
+        border-color: rgba(var(--accent-rgb), 0.4);
+        box-shadow: 0 12px 36px -18px rgba(var(--accent-rgb), 0.55);
+      }
+      .btn-primary:hover {
+        scale: 1.03;
+        transform: none;
+        filter: saturate(1.15) brightness(1.05);
+        box-shadow: 0 24px 56px -16px rgba(var(--accent-rgb), 0.85), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+      }
+      .btn-secondary:hover, .btn-save:hover, .btn-quiet:hover, .icon-btn:hover {
+        scale: 1.03;
+        box-shadow: 0 10px 30px -14px rgba(var(--accent-rgb), 0.55);
+      }
+      .phrase-chip:hover { scale: 1.04; box-shadow: 0 8px 24px -12px rgba(var(--accent-rgb), 0.6); }
+      .brand-mark:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 44px -6px rgba(var(--accent-rgb), 0.85); }
+    }
+    /* touch: отклик при нажатии вместо hover */
+    @media (hover: none) {
+      .dash-lesson:active, .story-card:active, .vocab-item:active, .test-card:active,
+      .stat-card:active, .quiz-option:active, .language-choice:active {
+        scale: 0.985;
+        box-shadow: var(--glow-soft);
+        transition-duration: 0.12s;
+      }
+      .btn:active, .icon-btn:active { scale: 0.96; transition-duration: 0.1s; }
+    }
+    .btn:active { transform: none; scale: 0.975; }
+
+    /* кнопка: «ползущий» блик при hover */
+    .btn-primary { position: relative; overflow: hidden; isolation: isolate; }
+    .btn-primary::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.38) 50%, transparent 70%);
+      translate: -120% 0;
+      transition: translate 0.8s var(--ease-apple);
+    }
+    @media (hover: hover) { .btn-primary:hover::after { translate: 120% 0; } }
+
+    /* ---------- 7. Flashcard & details ---------- */
+    .flashcard-face {
+      border-color: rgba(var(--accent-rgb), 0.3);
+      box-shadow: var(--glass-highlight), 0 30px 70px -40px rgba(var(--accent-rgb), 0.5);
+    }
+    .flashcard-inner { transition: transform 0.7s var(--ease-apple); }
+    @media (hover: hover) {
+      .flashcard:hover .flashcard-face { border-color: rgba(var(--accent-rgb), 0.5); box-shadow: var(--glow-soft); }
+    }
+    .flashcard:focus-visible, .btn:focus-visible, .icon-btn:focus-visible,
+    .dash-lesson:focus-visible, .story-card:focus-visible, .vocab-item:focus-visible {
+      outline: 2px solid rgba(var(--accent-rgb), 0.7);
+      outline-offset: 3px;
+    }
+    input, textarea, select { transition: border-color 0.25s ease, box-shadow 0.3s var(--ease-apple), background 0.25s ease; }
+    input:focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: none;
+      border-color: rgba(var(--accent-rgb), 0.6);
+      box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.14), 0 10px 30px -16px rgba(var(--accent-rgb), 0.6);
+    }
+    .toast { box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.8), var(--glass-highlight); }
+
+    /* ---------- 8. Theme tuning ---------- */
+    html[data-theme="hacker"] { --glass-border: rgba(var(--accent-rgb), 0.24); --glow-soft: 0 0 0 1px rgba(var(--accent-rgb), 0.35), 0 0 40px -10px rgba(var(--accent-rgb), 0.55); }
+    html[data-theme="cyber"] { --glow-soft: 0 0 0 1px rgba(var(--accent-rgb), 0.3), 0 18px 70px -20px rgba(var(--accent-rgb), 0.6), 0 0 40px -18px rgba(var(--accent2-rgb), 0.5); }
+    html[data-theme="nordic"] {
+      --glass-border: rgba(255, 255, 255, 0.09);
+      --glow-soft: 0 0 0 1px rgba(var(--accent-rgb), 0.2), 0 16px 40px -22px rgba(0, 0, 0, 0.7);
+      --float-distance: 3px;
+    }
+    html[data-theme="nordic"] .card,
+    html[data-theme="nordic"] .dash-lesson,
+    html[data-theme="nordic"] .story-card { -webkit-backdrop-filter: blur(14px) saturate(120%); backdrop-filter: blur(14px) saturate(120%); }
+
+    /* ---------- 9. Performance & accessibility ---------- */
+    @media (max-width: 700px) {
+      .card, .dash-lesson, .story-card, .stat-card, .side-card {
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+        backdrop-filter: blur(16px) saturate(140%);
+      }
+      .reveal { transform: translate3d(0, 22px, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .brand-mark, .hero-visual, .stat-icon, .toc-ring, .course-flag, .flag-mark,
+      .gemini-model-badge, .level-badge, .lesson-badge { animation: none !important; }
+      .dash-lesson:hover, .story-card:hover, .stat-card:hover, .btn:hover { scale: 1; }
+      .btn-primary::after { display: none; }
+    }

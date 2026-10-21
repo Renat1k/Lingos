@@ -118,7 +118,7 @@
     function renderStoryCard(item, index) {
       const { story, read, words, vocab } = item;
       return `
-        <article class="story-card${read ? " is-read" : ""}" style="--i:${index}" aria-labelledby="story-card-title-${story.id}">
+        <article class="story-card reveal${read ? " is-read" : ""}" style="--i:${index}" aria-labelledby="story-card-title-${story.id}">
           <div class="story-spine" aria-hidden="true">
             <div class="story-spine-top">
               <span>STORY_${pad(story.id)}</span>
@@ -223,15 +223,15 @@
           </div>
 
           <div class="dashboard-stats" aria-label="Статистика чтения">
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("book")}</span><span class="stat-code">LIBRARY</span></div>
               <div><div class="stat-value">${stats.total}</div><span class="stat-label">историй в библиотеке</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("check")}</span><span class="stat-code">FINISHED</span></div>
               <div><div class="stat-value">${stats.readCount}<small>из ${stats.total}</small></div><span class="stat-label">прочитано</span></div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card reveal">
               <div class="stat-top"><span class="stat-icon">${icon("clock")}</span><span class="stat-code">MINUTES</span></div>
               <div><div class="stat-value">${stats.totalMinutes}<small>мин</small></div><span class="stat-label">доступного чтения</span></div>
             </div>
@@ -367,7 +367,7 @@
             </div>
           </header>
 
-          <div class="card reading-card story-text-card">
+          <div class="card reveal reading-card story-text-card">
             <div class="story-reader-toolbar">
               <span class="reading-length">${icon("clock")} ${escapeHtml(story.read_time || "6 мин")} чтения</span>
               <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count>0 / ${vocab}</strong> слов открыто</span>
