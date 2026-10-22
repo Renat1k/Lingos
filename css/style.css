@@ -35,13 +35,33 @@
       --text-soft: #c9c9d0;
       --muted: #a1a1aa;
       --dim: #71717a;
-      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
-      --mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+      --font: 'Rubik', sans-serif;
+      --mono: 'Rubik', "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
       --radius-xl: 30px;
       --radius-lg: 24px;
       --radius-md: 18px;
       --shadow-card: 0 30px 80px -48px rgba(var(--accent-deep-rgb), 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.045);
       --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Global typeface: Rubik */
+    body,
+    button, input, select, textarea,
+    h1, h2, h3, h4, h5, h6,
+    .topbar, .site-footer,
+    .card, .glass, .btn,
+    .dashboard, .dashboard-hero, .dashboard-title, .dashboard-subtitle, .dashboard-actions,
+    .dash-lesson, .lesson-card-top, .lesson-card-footer, .lesson-meta,
+    .story-card, .story-card h2, .story-reader, .reading-prose, .story-prose,
+    .theory-body, .theory-key-phrase, .theory-fun-fact,
+    .quiz-question, .quiz-option, .practice-textarea,
+    .vocab-hub, .vocab-item, .vocab-word, .vocab-translation, .vocab-description,
+    .ai-chat-bubble, .ai-analysis-body, .ai-sheet-panel, .ai-studio-modal,
+    .builder-view, .builder-field, .builder-ai-panel, .builder-ai-message p,
+    .duplicates-panel, .duplicate-word, .gloss-panel,
+    .settings-modal, .word-modal, .import-modal, .review-modal,
+    .toast, .nav-pill, .level-badge, .story-chip {
+      font-family: 'Rubik', sans-serif;
     }
 
     html[data-theme="cyber"] {
@@ -105,7 +125,7 @@
       --text-soft: #b6ffd0;
       --muted: #79c995;
       --dim: #4f8a63;
-      --font: var(--mono);
+      --font: 'Rubik', sans-serif;
       --shadow-card: 0 30px 80px -48px rgba(0, 255, 102, 0.25), inset 0 1px 0 rgba(0, 255, 102, 0.06);
     }
 
@@ -4485,7 +4505,7 @@
     .google-button:active { transform: scale(0.99); }
     .google-button:disabled { opacity: 0.65; cursor: wait; }
     .google-g {
-      font-family: Arial, sans-serif;
+      font-family: 'Rubik', Arial, sans-serif;
       font-size: 1.2rem;
       font-weight: 800;
       background: conic-gradient(from -35deg, #4285f4 0 25%, #34a853 0 50%, #fbbc05 0 75%, #ea4335 0);
