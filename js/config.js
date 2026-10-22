@@ -87,6 +87,11 @@
       lv: "lv-LV", et: "et-EE", sq: "sq-AL", mk: "mk-MK", bs: "bs-BA"
     };
     const SPEECH_LANGUAGE_ALIASES = { no: ["nb", "no"], tl: ["fil", "tl"] };
+    const SPEECH_RATE_KEY = "lingua_speech_rate";
+    const SPEECH_VOICE_KEY = "lingua_speech_voice";
+    const ESTIMATED_MINUTES_PER_BLOCK = 4;
+    const ESTIMATED_WORDS_PER_MINUTE = 180;
+    const SYNC_DEVICE_LOCAL_KEYS = new Set([SPEECH_RATE_KEY, SPEECH_VOICE_KEY]);
     const SPEECH_COUNTRY_LANGUAGES = Object.fromEntries(
       FLAG_OPTIONS.map((option) => [option.code, option.lang])
     );
@@ -1643,6 +1648,56 @@
       }
     };
     Object.entries(E6_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E7_UI_TRANSLATIONS = {
+      ru: {
+        speech_listen: "Слушать", speech_pause: "Пауза", speech_resume: "Продолжить", speech_stop: "Стоп",
+        speech_speed: "Скорость", speech_voice_missing: "Голос для этого языка не найден на устройстве.",
+        speech_unsupported: "Озвучка недоступна в этом браузере.", cannot_hide_current: "Нельзя скрыть текущий активный курс.",
+        cannot_hide_last: "Нельзя скрыть последний видимый курс."
+      },
+      en: {
+        speech_listen: "Listen", speech_pause: "Pause", speech_resume: "Resume", speech_stop: "Stop",
+        speech_speed: "Speed", speech_voice_missing: "No voice for this language was found on the device.",
+        speech_unsupported: "Speech is not available in this browser.", cannot_hide_current: "You cannot hide the active course.",
+        cannot_hide_last: "You cannot hide the last visible course."
+      },
+      da: {
+        speech_listen: "Lyt", speech_pause: "Pause", speech_resume: "Fortsæt", speech_stop: "Stop",
+        speech_speed: "Hastighed", speech_voice_missing: "Der blev ikke fundet en stemme til dette sprog på enheden.",
+        speech_unsupported: "Oplæsning er ikke tilgængelig i denne browser.", cannot_hide_current: "Du kan ikke skjule det aktive kursus.",
+        cannot_hide_last: "Du kan ikke skjule det sidste synlige kursus."
+      },
+      tr: {
+        speech_listen: "Dinle", speech_pause: "Duraklat", speech_resume: "Devam et", speech_stop: "Durdur",
+        speech_speed: "Hız", speech_voice_missing: "Bu dil için cihazda ses bulunamadı.",
+        speech_unsupported: "Bu tarayıcıda sesli okuma kullanılamıyor.", cannot_hide_current: "Etkin kursu gizleyemezsin.",
+        cannot_hide_last: "Son görünür kursu gizleyemezsin."
+      }
+    };
+    Object.entries(E7_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E8_UI_TRANSLATIONS = {
+      ru: { active_courses_count: "{n} курсов" },
+      en: { active_courses_count: "{n} courses" },
+      da: { active_courses_count: "{n} kurser" },
+      tr: { active_courses_count: "{n} kurs" }
+    };
+    Object.entries(E8_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E9_UI_TRANSLATIONS = {
+      ru: { loading: "Загрузка…", retry: "Повторить", import_failed: "Импорт не удался: {message}", import_empty: "Вставь JSON перед импортом.", import_success: "Импорт завершён", import_updated: "обновлено {n}", sync_error: "Ошибка синхронизации", sync_retry_failed: "Не удалось повторить синхронизацию." },
+      en: { loading: "Loading…", retry: "Retry", import_failed: "Import failed: {message}", import_empty: "Paste JSON before importing.", import_success: "Import complete", import_updated: "updated {n}", sync_error: "Sync error", sync_retry_failed: "Could not retry sync." },
+      da: { loading: "Indlæser…", retry: "Prøv igen", import_failed: "Import mislykkedes: {message}", import_empty: "Indsæt JSON før import.", import_success: "Import fuldført", import_updated: "opdateret {n}", sync_error: "Synkroniseringsfejl", sync_retry_failed: "Kunne ikke prøve synkronisering igen." },
+      tr: { loading: "Yükleniyor…", retry: "Tekrar dene", import_failed: "İçe aktarma başarısız: {message}", import_empty: "İçe aktarmadan önce JSON yapıştır.", import_success: "İçe aktarma tamamlandı", import_updated: "güncellendi {n}", sync_error: "Eşitleme hatası", sync_retry_failed: "Eşitleme yeniden denenemedi." }
+    };
+    Object.entries(E9_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
       Object.assign(UI_TRANSLATIONS[language], dictionary);
     });
 

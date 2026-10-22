@@ -88,6 +88,7 @@
     const importClose = document.getElementById("importClose");
     const importCancel = document.getElementById("importCancel");
     const importConfirm = document.getElementById("importConfirm");
+    const importRetry = document.getElementById("importRetry");
     const importText = document.getElementById("importText");
     const importStatus = document.getElementById("importStatus");
     const copySimpleTemplateButton = document.getElementById("copySimpleTemplate");

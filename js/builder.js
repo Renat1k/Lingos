@@ -2028,6 +2028,7 @@
       const edit = event.target.closest("[data-edit-lesson]");
       if (edit) {
         event.preventDefault();
+        event.stopPropagation();
         requestEditLesson(edit.dataset.editLesson);
       }
     });

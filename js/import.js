@@ -278,6 +278,9 @@
       });
       importStatus.textContent = "";
       importStatus.className = "import-status";
+      importStatus.setAttribute("aria-busy", "false");
+      if (typeof importRetry !== "undefined" && importRetry) importRetry.hidden = true;
+      importConfirm.disabled = false;
     }
 
     function copyTextFallback(text) {
@@ -339,32 +342,60 @@
       else importModal.removeAttribute("open");
     }
 
-    function runImport() {
-      const raw = importText.value.trim();
-      if (!raw) {
-        importStatus.textContent = "Вставь JSON перед импортом.";
-        importStatus.className = "import-status is-error";
-        return;
+    let importBusy = false;
+
+    function setImportBusy(busy) {
+      importBusy = busy;
+      importConfirm.disabled = busy;
+      importRetry.disabled = busy;
+      importText.setAttribute("aria-busy", String(busy));
+      importStatus.setAttribute("aria-busy", String(busy));
+      if (busy) {
+        importStatus.textContent = t("loading");
+        importStatus.className = "import-status";
+        importRetry.hidden = true;
       }
+    }
+
+    function performImport(raw) {
       try {
         const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
         const payload = JSON.parse(cleaned);
         const result = importPayload(payload);
         const parts = [];
-        if (result.vocabAdded || result.vocabUpdated) parts.push(`слов: +${result.vocabAdded}${result.vocabUpdated ? ` / обновлено ${result.vocabUpdated}` : ""}`);
-        if (result.vocabUpdated) parts.push(t("vocab_merged"));
+        if (result.vocabAdded) parts.push(`${t("nav_vocabulary")}: +${result.vocabAdded}`);
+        if (result.vocabUpdated) parts.push(`${t("nav_vocabulary")}: ${t("import_updated", { n: result.vocabUpdated })}`);
         if (result.vocabInvalid) parts.push(t("vocab_invalid_skipped", { n: result.vocabInvalid }));
-        if (result.lessonsAdded || result.lessonsUpdated) parts.push(`уроков: +${result.lessonsAdded}${result.lessonsUpdated ? ` / обновлено ${result.lessonsUpdated}` : ""}`);
-        if (result.storiesAdded || result.storiesUpdated) parts.push(`историй: +${result.storiesAdded}${result.storiesUpdated ? ` / обновлено ${result.storiesUpdated}` : ""}`);
-        const message = `Импорт завершён · ${parts.join(" · ")}`;
+        if (result.lessonsAdded) parts.push(`${t("nav_course")}: +${result.lessonsAdded}`);
+        if (result.lessonsUpdated) parts.push(`${t("nav_course")}: ${t("import_updated", { n: result.lessonsUpdated })}`);
+        if (result.storiesAdded) parts.push(`${t("nav_stories")}: +${result.storiesAdded}`);
+        if (result.storiesUpdated) parts.push(`${t("nav_stories")}: ${t("import_updated", { n: result.storiesUpdated })}`);
+        const message = `${t("import_success")} · ${parts.join(" · ")}`;
         state.importDrafts = {};
         importStatus.textContent = message;
         importStatus.className = "import-status is-success";
+        importRetry.hidden = true;
         closeImportModal();
         rerenderCurrentView();
         showToast(message, "success");
       } catch (error) {
-        importStatus.textContent = `Не удалось импортировать: ${error.message}`;
+        importStatus.textContent = t("import_failed", { message: error?.message || String(error) });
         importStatus.className = "import-status is-error";
+        importRetry.hidden = false;
+      } finally {
+        setImportBusy(false);
       }
+    }
+
+    function runImport() {
+      if (importBusy) return;
+      const raw = importText.value.trim();
+      if (!raw) {
+        importStatus.textContent = t("import_empty");
+        importStatus.className = "import-status is-error";
+        importRetry.hidden = true;
+        return;
+      }
+      setImportBusy(true);
+      window.requestAnimationFrame(() => window.setTimeout(() => performImport(raw), 0));
     }

@@ -13,6 +13,20 @@
       return Array.isArray(stored) ? stored : [];
     }
 
+    function lessonDurationLabel(lesson, blocks) {
+      if (String(lesson?.duration || "").trim()) return lesson.duration;
+      const readingWords = (blocks || []).filter((block) => block.type === "reading_heavy")
+        .reduce((sum, block) => sum + countWords(String(block.text || "").replace(/<[^>]+>/g, " ")), 0);
+      const minutes = Math.max(5, Math.round((blocks || []).length * ESTIMATED_MINUTES_PER_BLOCK + readingWords / ESTIMATED_WORDS_PER_MINUTE));
+      return `${minutes} ${t("minutes")}`;
+    }
+
+    function readingLengthLabel(block) {
+      if (String(block?.word_count_label || "").trim()) return block.word_count_label;
+      const words = countWords(String(block?.text || "").replace(/<[^>]+>/g, " "));
+      return `${words} ${t("words")}`;
+    }
+
     function getLessonVocabulary(lesson) {
       const words = new Set();
       getLessonBlocks(lesson).forEach((block) => {
@@ -104,17 +118,19 @@
     }
 
     function getHiddenLessonCount() {
-      return state.lessons.filter((lesson) => isContentHidden("lesson", lesson.id) && !isContentDeleted("lesson", lesson.id, lesson.updated_at)).length;
+      return state.lessons.filter((lesson) => isContentHidden("lesson", lesson.id, !isImportedCourseItem("lesson", lesson.id)) && !isContentDeleted("lesson", lesson.id, lesson.updated_at)).length;
     }
 
     function lessonActionMarkup(lesson) {
       const imported = state.importedLessons.some((item) => Number(item.id) === Number(lesson.id));
-      if (imported) {
-        return `<button class="content-action" type="button" data-edit-lesson="${Number(lesson.id)}" data-i18n-aria="builder_edit_lesson" aria-label="${escapeHtml(t("builder_edit_lesson"))}">✎</button><button class="content-action is-danger" type="button" data-delete-lesson="${Number(lesson.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
-      }
-      return lesson.is_hidden
+      const hidden = isContentHidden("lesson", lesson.id, !imported);
+      const eye = hidden
         ? `<button class="content-action" type="button" data-show-lesson="${Number(lesson.id)}" data-i18n-aria="show_item" aria-label="${escapeHtml(t("show_item"))}">👁</button>`
         : `<button class="content-action" type="button" data-hide-lesson="${Number(lesson.id)}" data-i18n-aria="hide_item" aria-label="${escapeHtml(t("hide_item"))}">🙈</button>`;
+      if (imported) {
+        return `${eye}<button class="content-action" type="button" data-edit-lesson="${Number(lesson.id)}" data-i18n-aria="builder_edit_lesson" aria-label="${escapeHtml(t("builder_edit_lesson"))}">✎</button><button class="content-action is-danger" type="button" data-delete-lesson="${Number(lesson.id)}" data-i18n-aria="delete_item" aria-label="${escapeHtml(t("delete_item"))}">${icon("trash")}</button>`;
+      }
+      return eye;
     }
 
     function deleteImportedLesson(lessonId) {
@@ -128,24 +144,44 @@
       removeDashboardLessonCard(lessonId);
     }
 
+    function focusLessonAction(selectors) {
+      const list = Array.isArray(selectors) ? selectors : [selectors];
+      window.setTimeout(() => {
+        for (const selector of list) {
+          const target = document.querySelector(selector);
+          if (target) {
+            target.focus({ preventScroll: true });
+            return;
+          }
+        }
+      }, 420);
+    }
+
     function hideLesson(lessonId) {
-      setContentHidden("lesson", lessonId, true);
-      showHiddenLessons = false;
-      showToast(t("lesson_hidden"), "info");
-      removeDashboardLessonCard(lessonId);
+      withScrollPreserved(() => {
+        setContentHidden("lesson", lessonId, true);
+        showHiddenLessons = false;
+        showToast(t("lesson_hidden"), "info");
+        removeDashboardLessonCard(lessonId);
+      });
+      focusLessonAction(["[data-toggle-hidden-lessons]", "[data-hide-lesson]", "[data-show-lesson]", "[data-create-lesson]", ".lesson-grid"]);
     }
 
     function showLesson(lessonId) {
-      setContentHidden("lesson", lessonId, false);
-      showToast(t("lesson_shown"), "info");
-      refreshDashboardLessonCard(lessonId);
-      updateDashboardSummary();
+      withScrollPreserved(() => {
+        setContentHidden("lesson", lessonId, false);
+        showToast(t("lesson_shown"), "info");
+        refreshDashboardLessonCard(lessonId);
+        updateDashboardSummary();
+      });
+      focusLessonAction(`[data-hide-lesson="${Number(lessonId)}"]`);
     }
 
     document.addEventListener("click", (event) => {
       const deleteButton = event.target.closest("[data-delete-lesson]");
       if (deleteButton) {
         event.preventDefault();
+        event.stopPropagation();
         const lesson = state.lessons.find((item) => Number(item.id) === Number(deleteButton.dataset.deleteLesson));
         requestConfirmation({
           title: t("delete_lesson_title"),
@@ -159,12 +195,14 @@
       const hideButton = event.target.closest("[data-hide-lesson]");
       if (hideButton) {
         event.preventDefault();
+        event.stopPropagation();
         hideLesson(hideButton.dataset.hideLesson);
         return;
       }
       const showButton = event.target.closest("[data-show-lesson]");
       if (showButton) {
         event.preventDefault();
+        event.stopPropagation();
         showLesson(showButton.dataset.showLesson);
         return;
       }
@@ -284,7 +322,7 @@
       if (grid) {
         const empty = grid.querySelector(".dashboard-empty");
         if (!stats.cards.length && !empty) {
-          grid.innerHTML = `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(t("no_lessons_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`;
+          grid.innerHTML = `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(hiddenLessonCount ? t("hidden_show", { n: hiddenLessonCount }) : t("no_lessons_body"))}<br>${hiddenLessonCount ? `<button class="btn btn-primary" type="button" data-toggle-hidden-lessons>${escapeHtml(t("hidden_show", { n: hiddenLessonCount }))}</button>` : `<button class="btn btn-primary" type="button" data-create-lesson>${icon("plus")} ${escapeHtml(t("builder_create_lesson"))}</button>`}<button class="btn btn-quiet" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`;
         } else if (stats.cards.length && empty) {
           empty.remove();
         }
@@ -295,7 +333,8 @@
       const topbarProgress = document.getElementById("topbarProgress");
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Курс завершён на ${stats.completion}%`);
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `${currentLanguage()} / ${visibleLessons.length} modules · v2.8`;
+      if (footerMeta) footerMeta.textContent = `${currentLanguage()} / ${visibleLessons.length} modules · v2.22`;
+      if (typeof refreshSectionCounts === "function") refreshSectionCounts();
     }
 
     function refreshDashboardLessonCard(lessonId) {
@@ -384,7 +423,7 @@
             </div>
             <div class="hero-metrics" aria-label="${escapeHtml(t("lesson_map"))}">
               <div class="metric"><strong>${pad(blocks.length)}</strong><span>${escapeHtml(t("blocks"))}</span></div>
-              <div class="metric"><strong>${escapeHtml(lesson.duration || "20–25 мин")}</strong><span>${escapeHtml(t("minutes"))}</span></div>
+              <div class="metric"><strong>${escapeHtml(lessonDurationLabel(lesson, blocks))}</strong><span>${escapeHtml(t("minutes"))}</span></div>
               <div class="metric"><strong>${escapeHtml(lesson.level || "A2–B1")}</strong><span>${escapeHtml(t("level"))}</span></div>
               <div class="metric"><strong>${writing ? `${writing.min_words}+` : "—"}</strong><span>${escapeHtml(t("words_to_write"))}</span></div>
             </div>
@@ -448,7 +487,7 @@
           <div class="mobile-toc-panel" id="mobileTocPanel" hidden>
             <div class="mobile-toc-panel-head">
               <span>${escapeHtml(t("lesson_map"))}</span>
-              <span id="mobileTocVocabCount">0 / 0 ${escapeHtml(t("words"))}</span>
+              <span id="mobileTocVocabCount"></span>
             </div>
             <nav class="toc-nav" aria-label="${escapeHtml(t("lesson_map"))}">${items}</nav>
           </div>
@@ -471,7 +510,7 @@
               <span class="toc-words-icon">${icon("book")}</span>
               <div class="toc-words-copy">
                 <span>${escapeHtml(t("opened_words"))}</span>
-                <strong id="tocVocabCount">0 / 0</strong>
+                <strong id="tocVocabCount"></strong>
               </div>
             </div>
           </div>
@@ -520,7 +559,7 @@
             </div>
           </div>
           <div class="lesson-card-footer">
-            <span class="lesson-meta">${blocks.length} блоков · ${escapeHtml(lesson.duration || "20 мин")} · ${metrics.words}/${metrics.vocabTotal} слов</span>
+            <span class="lesson-meta">${blocks.length} блоков · ${escapeHtml(lessonDurationLabel(lesson, blocks))} · ${metrics.words}/${metrics.vocabTotal} слов</span>
             <a class="btn btn-primary lesson-launch" href="#lesson-${Number(lesson.id)}">
               ${launchLabel} ${icon("arrow-right")}
             </a>
@@ -530,6 +569,7 @@
     }
 
     function renderDashboard() {
+      stopSpeech();
       if (typeof state.scrollCleanup === "function") {
         state.scrollCleanup();
         state.scrollCleanup = null;
@@ -645,7 +685,7 @@
               </div>
             </div>
             <div class="lesson-grid">
-              ${stats.cards.length ? stats.cards.map(renderLessonCard).join("") : `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(t("no_lessons_body"))}<br><button class="btn btn-primary" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`}
+              ${stats.cards.length ? stats.cards.map(renderLessonCard).join("") : `<div class="dashboard-empty"><strong>${escapeHtml(t("no_lessons_title", { lang: languageName }))}</strong><br>${escapeHtml(hiddenLessonCount ? t("hidden_show", { n: hiddenLessonCount }) : t("no_lessons_body"))}<br>${hiddenLessonCount ? `<button class="btn btn-primary" type="button" data-toggle-hidden-lessons>${escapeHtml(t("hidden_show", { n: hiddenLessonCount }))}</button>` : `<button class="btn btn-primary" type="button" data-create-lesson>${icon("plus")} ${escapeHtml(t("builder_create_lesson"))}</button>`}<button class="btn btn-quiet" type="button" data-open-import>${icon("upload")} ${escapeHtml(t("import_json"))}</button></div>`}
             </div>
           </section>
           ${coursePanel === "tests" ? renderTestsPanel() : ""}
@@ -664,7 +704,7 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Курс завершён на ${stats.completion}%`);
       document.title = `LINGUA/OS — ${languageName} Dashboard`;
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `${language} / ${visibleLessons.length} modules · v2.8`;
+      if (footerMeta) footerMeta.textContent = `${language} / ${visibleLessons.length} modules · v2.22`;
       scrollToTopInstant();
     }
 
@@ -973,8 +1013,9 @@
             ${blockHead(block, index)}
             ${block.intro ? `<p class="reading-intro">${escapeHtml(block.intro)}</p>` : ""}
             <div class="reading-toolbar">
-              <span class="reading-length">${icon("clock")} ${escapeHtml(block.word_count_label || "Reading")}</span>
-              <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count>0 / 0</strong> слов открыто</span>
+              <span class="reading-length">${icon("clock")} ${escapeHtml(readingLengthLabel(block))}</span>
+              ${renderSpeechControls()}
+              <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count></strong> слов открыто</span>
             </div>
             <div class="reading-prose" data-ai-selectable="reading">${decorateGlossary(block.text || "", block.glossary)}</div>
             <div class="reading-footer">
@@ -1096,7 +1137,7 @@
             </div>
             <div class="quiz-result" data-quiz-result hidden aria-live="polite">
               <div class="quiz-result-main">
-                <strong class="quiz-result-value" data-quiz-result-value>0 / 0</strong>
+                <strong class="quiz-result-value" data-quiz-result-value></strong>
                 <div class="quiz-result-copy">
                   <strong data-quiz-result-title></strong>
                   <p data-quiz-result-copy></p>
@@ -1210,6 +1251,7 @@
     }
 
     function renderLesson(lesson) {
+      stopSpeech();
       if (typeof state.scrollCleanup === "function") {
         state.scrollCleanup();
         state.scrollCleanup = null;

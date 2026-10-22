@@ -66,10 +66,21 @@
       } catch (error) { /* storage unavailable */ }
     }
 
+    function allLanguageCodes() {
+      const custom = typeof loadCustomLanguages === "function" ? loadCustomLanguages() : [];
+      return [...new Set([
+        ...(Array.isArray(LANGUAGE_CODES) ? LANGUAGE_CODES : []),
+        ...Object.keys(state.languagePacks || {}),
+        ...custom.map((item) => item.code)
+      ])].filter(Boolean);
+    }
+
     function activeLanguageCodes() {
-      return (Array.isArray(LANGUAGE_CODES) ? LANGUAGE_CODES : []).filter((code) => {
+      const custom = typeof loadCustomLanguages === "function" ? loadCustomLanguages() : [];
+      return allLanguageCodes().filter((code) => {
         const pack = state.languagePacks?.[code];
-        return pack && !pack.is_archived;
+        const record = custom.find((item) => item.code === code);
+        return pack ? !pack.is_archived : !record?.is_archived;
       });
     }
 

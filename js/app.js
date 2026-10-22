@@ -37,14 +37,28 @@
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
       });
-      if (storiesSwitchCount) storiesSwitchCount.textContent = String(state.stories.length);
+      if (storiesSwitchCount) storiesSwitchCount.textContent = String(typeof getVisibleStories === "function" ? getVisibleStories().length : state.stories.length);
       if (vocabSwitchCount) vocabSwitchCount.textContent = String(state.vocab.length);
+    }
+
+    function refreshSectionCounts() {
+      const counts = {
+        course: typeof getVisibleLessons === "function" ? getVisibleLessons().length : state.lessons.length,
+        stories: typeof getVisibleStories === "function" ? getVisibleStories().length : state.stories.length,
+        vocabulary: state.vocab.length
+      };
+      Object.entries(counts).forEach(([key, count]) => {
+        const counter = document.querySelector(`[data-section-link="${key}"] .section-tab-count`);
+        if (counter) counter.textContent = String(count);
+      });
+      if (storiesSwitchCount) storiesSwitchCount.textContent = String(counts.stories);
+      if (vocabSwitchCount) vocabSwitchCount.textContent = String(counts.vocabulary);
     }
 
     function renderSectionTabs(active) {
       const tabs = [
-        { key: "course", icon: "book", label: t("nav_course"), count: state.lessons.length },
-        { key: "stories", icon: "spark", label: t("nav_stories"), count: state.stories.length },
+        { key: "course", icon: "book", label: t("nav_course"), count: typeof getVisibleLessons === "function" ? getVisibleLessons().length : state.lessons.length },
+        { key: "stories", icon: "spark", label: t("nav_stories"), count: typeof getVisibleStories === "function" ? getVisibleStories().length : state.stories.length },
         { key: "vocabulary", icon: "vault", label: t("nav_vocabulary"), count: state.vocab.length }
       ];
       return `
@@ -58,11 +72,54 @@
       `;
     }
 
+    function courseContentHidden(type, id, code, builtin = false) {
+      const content = readJSON(HIDDEN_CONTENT_KEY, null);
+      const bucket = content && typeof content === "object"
+        ? (type === "story" ? content.stories : content.lessons) || {}
+        : {};
+      const scopedKey = `${code}:${String(id)}`;
+      const scoped = bucket[scopedKey];
+      if (scoped !== undefined) return Boolean(scoped && typeof scoped === "object" ? scoped.hidden : scoped);
+      if (!builtin) return false;
+      const legacy = bucket[String(id)];
+      return legacy === true || Boolean(legacy && typeof legacy === "object" && legacy.hidden);
+    }
+
+    function courseContentDeleted(type, id, code, updatedAt) {
+      const tombstone = findTombstone(type, { language: code, id: String(id) });
+      return tombstoneBlocks(tombstone, { updated_at: updatedAt });
+    }
+
+    function courseVisibleItems(type, code, baseItems, importedItems) {
+      const map = new Map();
+      const collect = (items, builtin) => (Array.isArray(items) ? items : []).forEach((item, index) => {
+        if (!item || typeof item !== "object") return;
+        const id = item.id == null ? `__${index}` : String(item.id);
+        map.set(id, { item, builtin });
+      });
+      collect(baseItems, true);
+      collect(importedItems, false);
+      return [...map.entries()].filter(([id, entry]) => {
+        const item = entry.item;
+        if (item.is_hidden) return false;
+        if (courseContentHidden(type, id, code, entry.builtin)) return false;
+        if (courseContentDeleted(type, id, code, item.updated_at)) return false;
+        return true;
+      });
+    }
+
+    function getCourseDisplayStats(code) {
+      const pack = state.languagePacks?.[code] || {};
+      const importedLessons = readJSON(`lingua_${code}_imported_lessons`, []);
+      const importedStories = readJSON(`lingua_${code}_imported_stories`, []);
+      const lessons = courseVisibleItems("lesson", code, pack.lessons, importedLessons).length;
+      const stories = courseVisibleItems("story", code, pack.stories, importedStories).length;
+      return { code, lessons, stories };
+    }
+
     function languageCounts(code) {
-      const pack = state.languagePacks[code] || {};
-      const lessons = Array.isArray(pack.lessons) ? pack.lessons.length : 0;
-      const stories = Array.isArray(pack.stories) ? pack.stories.length : 0;
-      return `${lessons} ${t("nav_course").toLowerCase()} · ${stories} ${t("nav_stories").toLowerCase()}`;
+      const stats = getCourseDisplayStats(code);
+      return `${stats.lessons} ${t("nav_course").toLowerCase()} · ${stats.stories} ${t("nav_stories").toLowerCase()}`;
     }
 
     function isBuiltinLanguage(code) {
@@ -70,12 +127,13 @@
     }
 
     function renderLanguageFilterTabs() {
+      const codes = allLanguageCodes();
       const active = activeLanguageCodes().length;
-      const archived = LANGUAGE_CODES.filter((code) => state.languagePacks[code]?.is_archived).length;
+      const archived = codes.length - active;
       const tabs = [
         { key: "active", label: t("filter_active"), count: active },
         { key: "archived", label: t("filter_archived"), count: archived },
-        { key: "all", label: t("filter_all"), count: LANGUAGE_CODES.length }
+        { key: "all", label: t("filter_all"), count: codes.length }
       ];
       return `
         <div class="language-filter-row" role="tablist" aria-label="${escapeHtml(t("language"))}">
@@ -103,11 +161,19 @@
       const modalList = document.getElementById("languageModalList");
       const current = currentLanguage();
       const activeCodes = activeLanguageCodes();
-      const archivedCodes = LANGUAGE_CODES.filter((code) => state.languagePacks[code]?.is_archived);
+      const allCodes = allLanguageCodes();
+      const customRecords = loadCustomLanguages();
+      const archivedCodes = allCodes.filter((code) => {
+        const pack = state.languagePacks[code];
+        const record = customRecords.find((item) => item.code === code);
+        return pack ? pack.is_archived : Boolean(record?.is_archived);
+      });
       const filter = state.languageFilter || "active";
-      const visibleCodes = filter === "archived" ? archivedCodes : filter === "all" ? LANGUAGE_CODES : activeCodes;
+      const visibleCodes = filter === "archived" ? archivedCodes : filter === "all" ? allCodes : activeCodes;
       const optionMarkup = (code) => {
-        const archived = Boolean(state.languagePacks[code]?.is_archived);
+        const pack = state.languagePacks[code] || {};
+        const record = customRecords.find((item) => item.code === code);
+        const archived = Boolean(pack.is_archived ?? record?.is_archived);
         const builtin = isBuiltinLanguage(code);
         const deleteTitle = builtin ? t("builtin_archive_only") : t("delete_course");
         return `
@@ -134,10 +200,12 @@
         : "";
       const create = filter === "archived" ? "" : createCourseButtonMarkup("language-option language-create");
       const markup = renderLanguageFilterTabs() + rows + empty + create;
+      const scrollSnapshot = captureScrollState();
       if (settingsList) settingsList.innerHTML = markup;
       if (modalList) modalList.innerHTML = markup;
+      restoreScrollState(scrollSnapshot);
       const hint = document.querySelector('[aria-labelledby="languageSettingLabel"] .settings-hint');
-      if (hint) hint.textContent = `${activeCodes.length} ${t("active")}`;
+      if (hint) hint.textContent = t("active_courses_count", { n: activeCodes.length });
     }
 
     function renderLanguageSwitch() {
@@ -157,8 +225,23 @@
       `;
     }
 
+    function setAppBusy(busy) {
+      const loading = document.getElementById("appLoading");
+      if (loading) {
+        loading.hidden = !busy;
+        loading.setAttribute("aria-busy", String(busy));
+      }
+      app.setAttribute("aria-busy", String(busy));
+      document.querySelectorAll("[data-learning-language], [data-create-course]").forEach((button) => {
+        button.disabled = Boolean(busy);
+      });
+    }
+
     function setLearningLanguage(language, navigate) {
       if (!activeLanguageCodes().includes(language)) return;
+      const loading = document.getElementById("appLoading");
+      if (loading && !loading.hidden) return;
+      setAppBusy(true);
       const changed = currentLanguage() !== language;
       state.settings.language = language;
       if (changed) activateLanguageData(language);
@@ -179,6 +262,7 @@
         }
       }
       if (changed) showToast(`${t("language")}: ${languageLabel(language)}`, "info");
+      window.setTimeout(() => setAppBusy(false), 220);
     }
 
     function setUILanguage(language) {
@@ -257,7 +341,7 @@
       const length = [...value].length;
       if (!value || length > 3) {
         showToast(t("flag_custom_invalid"), "error");
-        courseCustomFlag.focus();
+        courseCustomFlag.focus({ preventScroll: true });
         return;
       }
       state.courseFlagDraft = {
@@ -292,7 +376,7 @@
         if (typeof courseModal.showModal === "function") courseModal.showModal();
         else courseModal.setAttribute("open", "");
       }
-      window.setTimeout(() => courseName.focus(), 80);
+      window.setTimeout(() => courseName.focus({ preventScroll: true }), 80);
     }
 
     function closeCourseModal() {
@@ -320,14 +404,14 @@
       event.preventDefault();
       const label = courseName.value.trim();
       if (!label) {
-        courseName.focus();
+        courseName.focus({ preventScroll: true });
         return;
       }
       const customFlag = courseCustomFlag.value.trim();
       if (customFlag) {
         if ([...customFlag].length > 3) {
           showToast(t("flag_custom_invalid"), "error");
-          courseCustomFlag.focus();
+          courseCustomFlag.focus({ preventScroll: true });
           return;
         }
         state.courseFlagDraft = { countryCode: "", lang: "", flag: customFlag, label: customFlag, custom: true };
@@ -438,7 +522,7 @@
           </div>
         </section>
       `;
-      topbarContext.textContent = "no_active_course";
+      topbarContext.textContent = t("no_active_courses").toLowerCase();
       progressValue.textContent = "00";
       topProgressBar.style.width = "0%";
       backToLessons.hidden = true;
@@ -449,8 +533,22 @@
     }
 
     function archiveLanguage(code) {
-      const pack = state.languagePacks[code];
-      if (!pack) return;
+      let pack = state.languagePacks[code];
+      if (!pack) {
+        const record = loadCustomLanguages().find((item) => item.code === code);
+        if (!record) return;
+        pack = { ...record, lessons: [], stories: [], vocab: [] };
+        state.languagePacks[code] = pack;
+        if (!LANGUAGE_CODES.includes(code)) LANGUAGE_CODES.push(code);
+      }
+      if (code === currentLanguage()) {
+        showToast(t("cannot_hide_current"), "info");
+        return;
+      }
+      if (activeLanguageCodes().length <= 1) {
+        showToast(t("cannot_hide_last"), "info");
+        return;
+      }
       const now = new Date().toISOString();
       pack.is_archived = true;
       pack.updated_at = now;
@@ -470,8 +568,14 @@
     }
 
     function unarchiveLanguage(code) {
-      const pack = state.languagePacks[code];
-      if (!pack) return;
+      let pack = state.languagePacks[code];
+      if (!pack) {
+        const record = loadCustomLanguages().find((item) => item.code === code);
+        if (!record) return;
+        pack = { ...record, lessons: [], stories: [], vocab: [] };
+        state.languagePacks[code] = pack;
+        if (!LANGUAGE_CODES.includes(code)) LANGUAGE_CODES.push(code);
+      }
       const now = new Date().toISOString();
       pack.is_archived = false;
       pack.updated_at = now;
@@ -821,14 +925,24 @@
 
       const archiveButton = event.target.closest("[data-archive-language]");
       if (archiveButton) {
+        event.preventDefault();
+        event.stopPropagation();
         const code = archiveButton.dataset.archiveLanguage;
-        if (state.languagePacks[code]?.is_archived) unarchiveLanguage(code);
-        else archiveLanguage(code);
+        const customRecord = loadCustomLanguages().find((item) => item.code === code);
+        const archived = state.languagePacks[code]
+          ? Boolean(state.languagePacks[code].is_archived)
+          : Boolean(customRecord?.is_archived);
+        withScrollPreserved(() => {
+          if (archived) unarchiveLanguage(code);
+          else archiveLanguage(code);
+        });
         return;
       }
 
       const deleteLanguageButton = event.target.closest("[data-delete-language]");
       if (deleteLanguageButton) {
+        event.preventDefault();
+        event.stopPropagation();
         deleteLanguage(deleteLanguageButton.dataset.deleteLanguage);
         return;
       }
@@ -1012,6 +1126,7 @@
     importClose.addEventListener("click", closeImportModal);
     importCancel.addEventListener("click", closeImportModal);
     importConfirm.addEventListener("click", runImport);
+    importRetry.addEventListener("click", runImport);
     document.querySelectorAll("[data-import-tab]").forEach((button) => {
       button.addEventListener("click", () => setImportTab(button.dataset.importTab));
     });
@@ -1071,6 +1186,10 @@
       } else {
         setSyncStatus("local");
       }
+    });
+
+    document.getElementById("syncRetry")?.addEventListener("click", () => {
+      void retryCloudSync();
     });
 
     window.addEventListener("hashchange", () => route(false));

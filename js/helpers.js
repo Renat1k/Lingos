@@ -4,6 +4,46 @@
     /* ---------- helpers ---------- */
     const pad = (value) => String(value).padStart(2, "0");
 
+    function captureScrollState() {
+      const containers = [...document.querySelectorAll("[data-scroll-preserve], .language-body, .language-list, .story-list, .app, main")]
+        .filter((element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          if (element.scrollHeight <= element.clientHeight + 1) return false;
+          const overflow = window.getComputedStyle(element).overflowY;
+          return overflow === "auto" || overflow === "scroll";
+        });
+      return {
+        windowX: window.scrollX,
+        windowY: window.scrollY,
+        containers: containers.map((element) => ({ element, top: element.scrollTop, left: element.scrollLeft }))
+      };
+    }
+
+    function restoreScrollState(snapshot) {
+      if (!snapshot) return;
+      const apply = () => {
+        window.scrollTo(snapshot.windowX || 0, snapshot.windowY || 0);
+        (snapshot.containers || []).forEach((entry) => {
+          if (entry.element && entry.element.isConnected) {
+            entry.element.scrollTop = entry.top;
+            entry.element.scrollLeft = entry.left;
+          }
+        });
+      };
+      window.requestAnimationFrame(() => {
+        apply();
+        window.requestAnimationFrame(apply);
+      });
+      window.setTimeout(apply, 0);
+    }
+
+    function withScrollPreserved(callback) {
+      const snapshot = captureScrollState();
+      const result = callback();
+      restoreScrollState(snapshot);
+      return result;
+    }
+
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
         "&": "&amp;",

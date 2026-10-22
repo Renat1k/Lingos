@@ -1024,7 +1024,7 @@
       if (topbarProgress) topbarProgress.setAttribute("aria-label", `Избранное: ${favorites} из ${total}`);
       document.title = `LINGUA/OS — ${languageLabel(currentLanguage())} Vocabulary`;
       const footerMeta = document.getElementById("footerMeta");
-      if (footerMeta) footerMeta.textContent = `lexicon / ${currentLanguage()} / ${total} words · v2.7`;
+      if (footerMeta) footerMeta.textContent = `lexicon / ${currentLanguage()} / ${total} words · v2.22`;
       scrollToTopInstant();
     }
 

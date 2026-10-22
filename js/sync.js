@@ -83,7 +83,8 @@
         local: { emoji: "⚪", label: t("sync_local") },
         saving: { emoji: "🟡", label: t("sync_saving") },
         synced: { emoji: "🟢", label: t("sync_synced") },
-        blocked: { emoji: "🟠", label: t("cloud_not_ready") }
+        blocked: { emoji: "🟠", label: t("cloud_not_ready") },
+        error: { emoji: "🔴", label: t("sync_error") }
       };
       const stateConfig = states[nextState] || states.local;
       if (nextState !== "saving") {
@@ -96,7 +97,10 @@
         const label = detail || stateConfig.label;
         syncStatus.setAttribute("aria-label", label);
         syncStatus.setAttribute("title", label);
+        syncStatus.setAttribute("aria-busy", String(currentSyncState === "saving"));
       }
+      const retryButton = document.getElementById("syncRetry");
+      if (retryButton) retryButton.hidden = currentSyncState !== "error";
       if (syncEmoji) syncEmoji.textContent = stateConfig.emoji;
       if (syncLabel) syncLabel.textContent = stateConfig.label;
       if (profileSyncStatus) {
@@ -106,10 +110,12 @@
             ? t("sync_saving")
             : currentSyncState === "blocked"
               ? t("cloud_not_ready")
-              : t("local_only");
+              : currentSyncState === "error"
+                ? t("sync_error")
+                : t("local_only");
       }
       const profileNote = document.getElementById("profileSyncNote");
-      if (profileNote) profileNote.textContent = t(currentSyncState === "blocked" ? "cloud_not_ready_hint" : "profile_sync_hint");
+      if (profileNote) profileNote.textContent = t(currentSyncState === "error" ? "sync_error" : currentSyncState === "blocked" ? "cloud_not_ready_hint" : "profile_sync_hint");
     }
 
     function beginCloudActivity() {
@@ -134,11 +140,16 @@
       try {
         for (let index = 0; index < window.localStorage.length; index += 1) {
           const key = window.localStorage.key(index);
-          if (!key || !key.startsWith("lingua_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX) || key.startsWith("lingua_builder_draft_") || key.startsWith("lingua_cloud_")) continue;
+          if (!key || !key.startsWith("lingua_") || SYNC_DEVICE_LOCAL_KEYS.has(key) || key.startsWith("lingua_speech_voice") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX) || key.startsWith("lingua_builder_draft_") || key.startsWith("lingua_cloud_")) continue;
           const raw = window.localStorage.getItem(key);
           if (raw == null) continue;
           try {
-            values[key] = JSON.parse(raw);
+            let parsed = JSON.parse(raw);
+            if (key === UI_SETTINGS_KEY && parsed && typeof parsed === "object") {
+              parsed = { ...parsed };
+              delete parsed.font;
+            }
+            values[key] = parsed;
           } catch (error) {
             values[key] = raw;
           }
@@ -279,9 +290,10 @@
     }
 
     function mergeSettingsValue(localValue, remoteValue) {
-      if (!localValue || typeof localValue !== "object") return remoteValue;
-      if (!remoteValue || typeof remoteValue !== "object") return localValue;
-      return timestampValue(remoteValue.updated_at) > timestampValue(localValue.updated_at) ? remoteValue : localValue;
+      const local = localValue && typeof localValue === "object" ? localValue : {};
+      const remote = remoteValue && typeof remoteValue === "object" ? remoteValue : {};
+      const base = timestampValue(remote.updated_at) > timestampValue(local.updated_at) ? remote : local;
+      return { ...base, font: local.font === "large" ? "large" : "normal" };
     }
 
     function applyCloudPayload(payload) {
@@ -306,7 +318,7 @@
         }
         Object.entries(payload.values).forEach(([key, value]) => {
           if (key === DELETED_KEY) return;
-          if (!key.startsWith("lingua_") || key.startsWith("lingua_cloud_") || key.startsWith("lingua_builder_draft_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX)) return;
+          if (!key.startsWith("lingua_") || SYNC_DEVICE_LOCAL_KEYS.has(key) || key.startsWith("lingua_speech_voice") || key.startsWith("lingua_cloud_") || key.startsWith("lingua_builder_draft_") || key === PROFILE_KEY || key === GEMINI_KEY_STORAGE || key === GEMINI_MODEL_STORAGE || key.startsWith(AI_CHATS_STORAGE_PREFIX) || key.startsWith(AI_PROVIDER_STORAGE_PREFIX)) return;
           let nextValue = value;
           if (key === UI_SETTINGS_KEY) {
             nextValue = mergeSettingsValue(readJSON(key, null), value);
@@ -611,7 +623,7 @@
           endCloudActivity(false);
           console.warn("Cloud sync save failed.", error);
           if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
-          else setSyncStatus("local");
+          else setSyncStatus("error", t("sync_error"));
           return false;
         }
       } finally {
@@ -672,7 +684,7 @@
           endCloudActivity(false);
           console.warn("Cloud sync load failed.", error);
           if (isCloudSchemaMissing(error)) setSyncStatus("blocked", t("cloud_not_ready"));
-          else setSyncStatus("local");
+          else setSyncStatus("error", t("sync_error"));
           return false;
         }
       })();
@@ -695,6 +707,23 @@
       } catch (error) {
         console.warn("Cloud sync start failed.", error);
         setSyncStatus("local");
+      }
+    }
+
+    async function retryCloudSync() {
+      const button = document.getElementById("syncRetry");
+      if (button) button.disabled = true;
+      try {
+        if (!cloudUserId) await initCloudSync();
+        if (!cloudUserId) return;
+        const pulled = await pullCloudData();
+        if (!pulled) return;
+        await pushCloudData({ skipPull: true });
+      } catch (error) {
+        console.warn("Cloud sync retry failed.", error);
+        setSyncStatus("error", t("sync_retry_failed"));
+      } finally {
+        if (button) button.disabled = false;
       }
     }
 

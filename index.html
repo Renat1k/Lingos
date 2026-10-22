@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=2.22" />
+  <link rel="stylesheet" href="css/style.css?v=2.25" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
@@ -97,14 +97,15 @@
           <span class="language-pill-label" id="topbarLanguageLabel">English</span>
           <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"></use></svg>
         </button>
-        <span class="sync-pill" id="syncStatus" data-state="local" role="status" aria-live="polite" aria-label="Локальный режим" title="Локальный режим">
+        <span class="sync-pill" id="syncStatus" data-state="local" role="status" aria-live="polite" aria-busy="false" aria-label="Локальный режим" title="Локальный режим">
           <span class="sync-emoji" id="syncEmoji" aria-hidden="true">⚪</span>
           <span class="sync-label" id="syncLabel">Локальный режим</span>
         </span>
+        <button class="sync-retry" id="syncRetry" type="button" data-i18n="retry" hidden>Повторить</button>
         <div class="google-header-btn" id="google-btn-header" hidden></div>
         <div class="progress-pill" id="topbarProgress" aria-label="Прогресс">
           <span class="progress-label">PROGRESS</span>
-          <strong><span id="progressValue">00</span>%</strong>
+          <strong><span id="progressValue"></span>%</strong>
         </div>
         <button class="profile-button" id="profileButton" type="button" aria-label="Профиль и вход" aria-haspopup="dialog">
           <span class="profile-avatar" id="profileAvatar"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
@@ -141,6 +142,11 @@
       </div>
     </noscript>
   </main>
+
+  <div class="app-loading" id="appLoading" role="status" aria-live="polite" aria-busy="false" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    <span data-i18n="loading">Загрузка…</span>
+  </div>
 
   <footer class="site-footer">
     <div class="footer-inner">
@@ -669,9 +675,10 @@
           </div>
         </div>
         <textarea class="import-textarea" id="importText" spellcheck="false" aria-label="JSON для импорта"></textarea>
-        <p class="import-status" id="importStatus" aria-live="polite"></p>
+        <p class="import-status" id="importStatus" aria-live="polite" aria-busy="false"></p>
         <p class="import-note" data-i18n="import_note">Поддерживается чистый JSON или код в markdown-блоке.</p>
         <div class="import-actions">
+          <button class="btn btn-quiet" id="importRetry" type="button" data-i18n="retry" hidden>Повторить</button>
           <button class="btn btn-quiet" id="importCancel" type="button" data-i18n="cancel">Отмена</button>
           <button class="btn btn-primary" id="importConfirm" type="button" data-i18n="import_button">Импортировать</button>
         </div>
@@ -709,7 +716,7 @@
 
       <div class="review-session" id="reviewSession" hidden>
         <div class="review-progress-row">
-          <span id="reviewPosition" class="review-position">1 / 1</span>
+          <span id="reviewPosition" class="review-position"></span>
           <span id="reviewLevel" class="review-level"></span>
         </div>
         <div class="flashcard" id="reviewCard" tabindex="0" role="button" aria-pressed="false" aria-label="Flip flashcard" data-i18n-aria="review_flip">
@@ -899,23 +906,23 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.22"></script>
-  <script src="js/data-default.js?v=2.22"></script>
-  <script src="js/state.js?v=2.22"></script>
-  <script src="js/dom.js?v=2.22"></script>
-  <script src="js/helpers.js?v=2.22"></script>
-  <script src="js/sync.js?v=2.22"></script>
-  <script src="js/auth.js?v=2.22"></script>
-  <script src="js/ai-providers.js?v=2.22"></script>
-  <script src="js/prompts.js?v=2.22"></script>
-  <script src="js/ai-studio.js?v=2.22"></script>
-  <script src="js/ui-settings.js?v=2.22"></script>
-  <script src="js/vocab.js?v=2.22"></script>
-  <script src="js/stories.js?v=2.22"></script>
-  <script src="js/lessons.js?v=2.22"></script>
-  <script src="js/import.js?v=2.22"></script>
-  <script src="js/builder.js?v=2.22"></script>
-  <script src="js/app.js?v=2.22"></script>
+  <script src="js/config.js?v=2.25"></script>
+  <script src="js/data-default.js?v=2.25"></script>
+  <script src="js/state.js?v=2.25"></script>
+  <script src="js/dom.js?v=2.25"></script>
+  <script src="js/helpers.js?v=2.25"></script>
+  <script src="js/sync.js?v=2.25"></script>
+  <script src="js/auth.js?v=2.25"></script>
+  <script src="js/ai-providers.js?v=2.25"></script>
+  <script src="js/prompts.js?v=2.25"></script>
+  <script src="js/ai-studio.js?v=2.25"></script>
+  <script src="js/ui-settings.js?v=2.25"></script>
+  <script src="js/vocab.js?v=2.25"></script>
+  <script src="js/stories.js?v=2.25"></script>
+  <script src="js/lessons.js?v=2.25"></script>
+  <script src="js/import.js?v=2.25"></script>
+  <script src="js/builder.js?v=2.25"></script>
+  <script src="js/app.js?v=2.25"></script>
   <script src="js/reveal.js" defer></script>
 </body>
 </html>
