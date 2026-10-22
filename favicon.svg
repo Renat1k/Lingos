@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="275 80 255 230" width="100%" height="100%">
+  <g id="fused-code-bubbles-only">
+    
+    <!-- SPEECH BUBBLE 1: Left / Bright Purple (#7000FF) -->
+    <!-- Shadow -->
+    <path d="M 285,115 L 395,115 L 395,225 L 335,225 L 305,255 L 305,225 L 285,225 Z" fill="#000000" transform="translate(8, 8)" />
+    <!-- Main Body -->
+    <path d="M 285,115 L 395,115 L 395,225 L 335,225 L 305,255 L 305,225 L 285,225 Z" fill="#7000FF" stroke="#000000" stroke-width="7" stroke-linejoin="miter" />
+    
+    <!-- `<` Code Bracket inside Bubble 1 -->
+    <path d="M 365,145 L 320,170 L 365,195" fill="none" stroke="#000000" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" />
+    <path d="M 365,145 L 320,170 L 365,195" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter" />
+
+    <!-- SPEECH BUBBLE 2: Right / Pure White (#FFFFFF) -->
+    <!-- Shadow -->
+    <path d="M 405,155 L 515,155 L 515,265 L 495,265 L 495,295 L 465,265 L 405,265 Z" fill="#000000" transform="translate(8, 8)" />
+    <!-- Main Body -->
+    <path d="M 405,155 L 515,155 L 515,265 L 495,265 L 495,295 L 465,265 L 405,265 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="miter" />
+
+    <!-- `>` Code Bracket inside Bubble 2 -->
+    <path d="M 435,185 L 480,210 L 435,235" fill="none" stroke="#000000" stroke-width="22" stroke-linecap="square" stroke-linejoin="miter" />
+    <path d="M 435,185 L 480,210 L 435,235" fill="none" stroke="#7000FF" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter" />
+
+    <!-- CENTER CODE SLASH `/` -->
+    <!-- Slash Hard Shadow -->
+    <polygon points="412,95 428,95 388,285 372,285" fill="#000000" transform="translate(6, 6)" />
+    <!-- Slash Main Polygon -->
+    <polygon points="412,95 428,95 388,285 372,285" fill="#FFE600" stroke="#000000" stroke-width="6" stroke-linejoin="miter" />
+
+  </g>
+</svg>
