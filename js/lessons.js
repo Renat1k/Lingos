@@ -887,6 +887,7 @@
       const toneClass = (tone) => ["cyan", "emerald", "red", "muted"].includes(tone) ? ` is-${tone}` : "";
       const formulas = Array.isArray(block.formulas) ? block.formulas : [];
       const mistakes = Array.isArray(block.mistakes) ? block.mistakes : [];
+      const keyPhrases = Array.isArray(block.key_phrases) ? block.key_phrases.filter((item) => item && (item.original || item.translation)) : [];
 
       return `
         <section class="lesson-block" id="block-${number}" data-block-index="${index}" data-block-type="theory" style="--i:${index}" aria-labelledby="block-title-${number}">
@@ -907,6 +908,18 @@
                 `).join("")}
               </div>
             </div>
+            ${keyPhrases.length ? `
+              <div class="theory-key-phrases" aria-label="${escapeHtml(t("theory_key_phrases"))}">
+                <div class="theory-section-label">${escapeHtml(t("theory_key_phrases"))}</div>
+                ${keyPhrases.map((item) => `
+                  <div class="theory-key-phrase">
+                    <strong dir="auto">${escapeHtml(item.original || "")}</strong>
+                    ${item.translation ? `<span>${escapeHtml(item.translation)}</span>` : ""}
+                    ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}
+                  </div>
+                `).join("")}
+              </div>
+            ` : ""}
             <p class="theory-body">${escapeHtml(block.content || block.body || "")}</p>
 
             ${formulas.length ? `
@@ -940,6 +953,12 @@
                 <p>${escapeHtml(block.tip)}</p>
               </div>
             ` : ""}
+            ${block.fun_fact ? `
+              <div class="theory-fun-fact">
+                <strong>${escapeHtml(t("theory_fun_fact"))}</strong>
+                <p>${escapeHtml(block.fun_fact)}</p>
+              </div>
+            ` : ""}
           </div>
         </section>
       `;
@@ -957,7 +976,7 @@
               <span class="reading-length">${icon("clock")} ${escapeHtml(block.word_count_label || "Reading")}</span>
               <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count>0 / 0</strong> слов открыто</span>
             </div>
-            <div class="reading-prose" data-ai-selectable="reading">${block.text || ""}</div>
+            <div class="reading-prose" data-ai-selectable="reading">${decorateGlossary(block.text || "", block.glossary)}</div>
             <div class="reading-footer">
               <div class="glossary-tip">
                 ${icon("book")}

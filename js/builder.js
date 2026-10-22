@@ -74,6 +74,8 @@
           rule_lines: [],
           formulas: [],
           mistakes: [],
+          key_phrases: [],
+          fun_fact: "",
           tip: ""
         };
       }
@@ -83,6 +85,7 @@
           intro: "",
           word_count_label: "",
           glossary_hint: "",
+          glossary: [],
           text: ""
         };
       }
@@ -166,6 +169,12 @@
           block.rule_lines = Array.isArray(block.rule_lines) ? block.rule_lines : [];
           block.formulas = Array.isArray(block.formulas) ? block.formulas : [];
           block.mistakes = Array.isArray(block.mistakes) ? block.mistakes : [];
+          block.key_phrases = (Array.isArray(block.key_phrases) ? block.key_phrases : []).map((item) => ({
+            original: String(item?.original || ""),
+            translation: String(item?.translation || ""),
+            note: String(item?.note || "")
+          }));
+          block.fun_fact = String(block.fun_fact || "");
           block.tip = String(block.tip || "");
         }
         if (block.type === "reading_heavy") {
@@ -173,6 +182,11 @@
           block.text = String(block.text || "");
           block.word_count_label = String(block.word_count_label || "");
           block.glossary_hint = String(block.glossary_hint || "");
+          block.glossary = (Array.isArray(block.glossary) ? block.glossary : []).map((item) => ({
+            word: String(item?.word || ""),
+            translation: String(item?.translation || ""),
+            explanation: String(item?.explanation || "")
+          }));
         }
         if (block.type === "dialogue") {
           block.intro = String(block.intro || "");
@@ -486,9 +500,20 @@
         if (block.type === "theory") {
           block.content = String(block.content || "").trim();
           block.rule_lines = (block.rule_lines || []).filter((line) => String(line.text || "").trim());
+          block.key_phrases = (block.key_phrases || []).map((item) => ({
+            original: String(item.original || "").trim(),
+            translation: String(item.translation || "").trim(),
+            note: String(item.note || "").trim()
+          })).filter((item) => item.original || item.translation).slice(0, 8);
+          block.fun_fact = String(block.fun_fact || "").trim();
         }
         if (block.type === "reading_heavy") {
           block.text = sanitizeRichText(block.text);
+          block.glossary = (block.glossary || []).map((item) => ({
+            word: String(item.word || "").trim(),
+            translation: String(item.translation || "").trim(),
+            explanation: String(item.explanation || "").trim()
+          })).filter((item) => item.word).slice(0, 8);
         }
         if (block.type === "dialogue") {
           block.participants = (block.participants || []).filter((participant) => String(participant.name || "").trim()).map((participant, index) => ({
@@ -737,6 +762,8 @@
           ${builderTextarea(`${prefix}._rules`, t("builder_rule_lines"), builderRulesValue(block), { hint: t("builder_rule_hint"), rows: 3 })}
           ${builderTextarea(`${prefix}._formulas`, t("builder_formulas"), builderObjectsValue(block.formulas, ["label", "structure", "example", "note"]), { hint: t("builder_formulas_hint"), rows: 2 })}
           ${builderTextarea(`${prefix}._mistakes`, t("builder_mistakes"), builderObjectsValue(block.mistakes, ["bad", "good", "why"]), { hint: t("builder_mistakes_hint"), rows: 2 })}
+          ${builderTextarea(`${prefix}._key_phrases`, t("builder_key_phrases"), builderObjectsValue(block.key_phrases, ["original", "translation", "note"]), { hint: t("builder_key_phrases_hint"), rows: 2 })}
+          ${builderTextarea(`${prefix}.fun_fact`, t("builder_fun_fact"), block.fun_fact, { rows: 2 })}
           ${builderField(`${prefix}.terminal_label`, t("builder_terminal_label"), block.terminal_label)}
           ${builderTextarea(`${prefix}.tip`, t("builder_tip"), block.tip, { rows: 2 })}
         `;
@@ -747,6 +774,7 @@
           ${builderTextarea(`${prefix}.text`, t("builder_reading_text"), block.text, { required: true, rows: 7, hint: t("builder_reading_hint") })}
           ${builderField(`${prefix}.word_count_label`, t("builder_word_count"), block.word_count_label)}
           ${builderField(`${prefix}.glossary_hint`, t("builder_glossary_hint"), block.glossary_hint)}
+          ${builderTextarea(`${prefix}._glossary`, t("builder_glossary"), builderObjectsValue(block.glossary, ["word", "translation", "explanation"]), { hint: t("builder_glossary_hint_form"), rows: 3 })}
         `;
       }
       if (block.type === "dialogue") {
@@ -1105,9 +1133,10 @@
               <span>${escapeHtml(t("builder_ai_task"))}</span>
               <textarea id="builderAiTask" rows="3" placeholder="${escapeHtml(t("builder_ai_placeholder"))}" ${builderAi.busy || builderAi.pending ? "disabled" : ""}></textarea>
             </label>
+            ${selected ? "" : `<p class="builder-ai-select-hint">${escapeHtml(t("builder_ai_no_selection"))}</p>`}
             <div class="builder-ai-compose-actions">
               <button class="btn btn-quiet" type="button" data-builder-ai-whole ${builderAi.busy || builderAi.pending ? "disabled" : ""}>✨ ${escapeHtml(t("builder_ai_whole"))}</button>
-              <button class="btn btn-primary" type="button" data-builder-ai-send ${!selected || builderAi.busy || builderAi.pending ? "disabled" : ""}>${escapeHtml(t("builder_ai_send"))}</button>
+              <button class="btn btn-primary" type="button" data-builder-ai-send ${builderAi.busy || builderAi.pending ? "disabled" : ""}>${escapeHtml(t("builder_ai_send"))}</button>
             </div>
             <p class="builder-hint">${escapeHtml(t("builder_ai_private"))}</p>
           </div>
@@ -1149,6 +1178,10 @@
       return error;
     }
 
+    function builderAiValidationText(errors) {
+      return Object.entries(errors).map(([key, message]) => `${key}: ${message}`).join("; ").slice(0, 600);
+    }
+
     function builderAiNormalizeBlock(rawBlock, expectedType) {
       if (!rawBlock || typeof rawBlock !== "object" || rawBlock.type !== expectedType) {
         throw builderAiError("block_mismatch", t("builder_ai_block_mismatch"));
@@ -1158,21 +1191,28 @@
         level: builderState.lesson.level || "B1",
         blocks: [rawBlock]
       }, 1);
-      if (!candidate || !candidate.blocks?.length) throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
-      const block = candidate.blocks[0];
+      if (!candidate || !candidate.blocks?.length) throw builderAiError("schema", t("builder_ai_invalid_schema"));
+      const base = builderHydrateLesson({
+        ...builderState.lesson,
+        title: builderState.lesson.title || "AI block",
+        blocks: [candidate.blocks[0]]
+      });
+      const block = base.blocks[0];
       if (block.type !== expectedType) throw builderAiError("block_mismatch", t("builder_ai_block_mismatch"));
-      try {
-        if (typeof validateLessonBlocks === "function") validateLessonBlocks({ ...builderState.lesson, title: builderState.lesson.title || "AI block", blocks: [block] });
-      } catch (error) {
-        throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
+      const validation = builderValidate(base);
+      if (Object.keys(validation.errors).length) {
+        throw builderAiError("validation", t("builder_ai_validation_detail", { details: builderAiValidationText(validation.errors) }));
       }
-      const validation = builderValidate({ ...builderState.lesson, title: builderState.lesson.title || "AI block", blocks: [block] });
-      if (Object.keys(validation.errors).length) throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
+      try {
+        if (typeof validateLessonBlocks === "function") validateLessonBlocks(base);
+      } catch (error) {
+        throw builderAiError("schema", t("builder_ai_invalid_schema"));
+      }
       return block;
     }
 
     function builderAiNormalizeLesson(rawLesson) {
-      if (!rawLesson || typeof rawLesson !== "object") throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
+      if (!rawLesson || typeof rawLesson !== "object") throw builderAiError("schema", t("builder_ai_invalid_schema"));
       const current = builderState.lesson;
       const merged = {
         ...rawLesson,
@@ -1185,15 +1225,18 @@
         updated_at: current.updated_at
       };
       const normalized = normalizeImportedLesson(merged, current.id || 1);
-      if (!normalized) throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
-      try {
-        if (typeof validateLessonBlocks === "function") validateLessonBlocks(normalized);
-      } catch (error) {
-        throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
+      if (!normalized) throw builderAiError("schema", t("builder_ai_invalid_schema"));
+      const hydrated = builderHydrateLesson(normalized);
+      const validation = builderValidate(hydrated);
+      if (Object.keys(validation.errors).length) {
+        throw builderAiError("validation", t("builder_ai_validation_detail", { details: builderAiValidationText(validation.errors) }));
       }
-      const validation = builderValidate(normalized);
-      if (Object.keys(validation.errors).length) throw builderAiError("invalid_schema", t("builder_ai_invalid_schema"));
-      return normalized;
+      try {
+        if (typeof validateLessonBlocks === "function") validateLessonBlocks(hydrated);
+      } catch (error) {
+        throw builderAiError("schema", t("builder_ai_invalid_schema"));
+      }
+      return hydrated;
     }
 
     function builderAiParseBlock(raw, expectedType) {
@@ -1236,7 +1279,7 @@
       builderAi.busy = true;
       builderAi.statusKind = "generating";
       builderAi.status = t("builder_ai_status_generating");
-      builderAiAddMessage("user", mode === "lesson" ? t("builder_ai_whole_task") : task, "task");
+      builderAiAddMessage("user", task, "task");
       const controller = new AbortController();
       builderAi.controller = controller;
       builderAiUpdatePanel();
@@ -1270,6 +1313,7 @@
       try {
         let parsed = null;
         let result = null;
+        let lastFailure = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           builderAi.statusKind = "generating";
           builderAi.status = t("builder_ai_status_generating");
@@ -1279,22 +1323,60 @@
           builderAi.statusKind = "checking";
           builderAi.status = t("builder_ai_status_checking");
           builderAiUpdatePanel();
-          try {
-            const raw = parseGeminiJson(result.text);
-            parsed = mode === "lesson" ? builderAiParseLesson(raw) : builderAiParseBlock(raw, block.type);
-            break;
-          } catch (parseError) {
-            if (attempt === 0) {
-              builderAi.statusKind = "retry";
-              builderAi.status = t("builder_ai_status_retry_invalid");
-              builderAiUpdatePanel();
-              continue;
+          if (!result?.text) {
+            lastFailure = builderAiError("empty", t("builder_ai_empty"));
+          } else if (result.finishReason === "length" || result.finishReason === "max_tokens" || result.finishReason === "MAX_TOKENS") {
+            console.warn("[builder-ai] response truncated", {
+              finishReason: result.finishReason,
+              length: result.text.length,
+              provider: result.provider,
+              model: result.model,
+              maxOutputTokens: mode === "lesson" ? 16000 : 6000,
+              text: result.text
+            });
+            lastFailure = builderAiError("truncated", t("builder_ai_truncated", { n: result.text.length }));
+          } else {
+            let raw = null;
+            try {
+              raw = parseGeminiJson(result.text);
+            } catch (parseError) {
+              console.warn("[builder-ai] invalid JSON", {
+                finishReason: result.finishReason,
+                length: result.text.length,
+                provider: result.provider,
+                model: result.model,
+                maxOutputTokens: mode === "lesson" ? 16000 : 6000,
+                text: result.text
+              });
+              lastFailure = builderAiError("parse", t("builder_ai_invalid_json"));
             }
-            throw builderAiError("invalid_json", t("builder_ai_invalid_json"));
+            if (raw) {
+              try {
+                parsed = mode === "lesson" ? builderAiParseLesson(raw) : builderAiParseBlock(raw, block.type);
+              } catch (schemaError) {
+                console.warn("[builder-ai] invalid schema", {
+                  finishReason: result.finishReason,
+                  length: result.text.length,
+                  provider: result.provider,
+                  model: result.model,
+                  maxOutputTokens: mode === "lesson" ? 16000 : 6000,
+                  message: schemaError?.builderAiMessage || schemaError?.message || "",
+                  text: result.text
+                });
+                lastFailure = schemaError;
+              }
+            }
+          }
+          if (parsed) break;
+          if (attempt === 0) {
+            builderAi.statusKind = "retry";
+            builderAi.status = t("builder_ai_status_retry_invalid");
+            builderAiUpdatePanel();
+            continue;
           }
         }
         if (!builderAi || !builderState) return;
-        if (!parsed) throw builderAiError("invalid_json", t("builder_ai_invalid_json"));
+        if (!parsed) throw lastFailure || builderAiError("parse", t("builder_ai_invalid_json"));
         builderAi.busy = false;
         builderAi.controller = null;
         builderAi.statusKind = "ready";
@@ -1452,7 +1534,7 @@
         }).then((confirmed) => {
           if (!confirmed || !builderState) return;
           if (builderAi) {
-            if (builderAi.selectedBlock === blockIndex) builderAi.selectedBlock = null;
+            if (builderAi.selectedBlock === blockIndex) builderAi.selectedBlock = builderState.lesson.blocks.length > 1 ? Math.min(blockIndex, builderState.lesson.blocks.length - 2) : null;
             else if (builderAi.selectedBlock > blockIndex) builderAi.selectedBlock -= 1;
             if (builderAi.pending?.request?.index === blockIndex) builderAi.pending = null;
             else if (builderAi.pending?.request?.index > blockIndex) builderAi.pending.request.index -= 1;
@@ -1573,6 +1655,16 @@
         if (block) block.mistakes = builderParseObjects(value, ["bad", "good", "why"]);
         return;
       }
+      if (path.endsWith("._key_phrases")) {
+        const block = builderGetPath(path.slice(0, -13));
+        if (block) block.key_phrases = builderParseObjects(value, ["original", "translation", "note"]);
+        return;
+      }
+      if (path.endsWith("._glossary")) {
+        const block = builderGetPath(path.slice(0, -10));
+        if (block) block.glossary = builderParseObjects(value, ["word", "translation", "explanation"]);
+        return;
+      }
       if (path.endsWith("._notes")) {
         const block = builderGetPath(path.slice(0, -7));
         if (block) block.grammar_notes = builderParseObjects(value, ["phrase", "explanation"]);
@@ -1597,6 +1689,8 @@
       }
       if (path.endsWith("._formulas")) return builderObjectsValue(builderGetPath(path.slice(0, -10))?.formulas, ["label", "structure", "example", "note"]);
       if (path.endsWith("._mistakes")) return builderObjectsValue(builderGetPath(path.slice(0, -10))?.mistakes, ["bad", "good", "why"]);
+      if (path.endsWith("._key_phrases")) return builderObjectsValue(builderGetPath(path.slice(0, -13))?.key_phrases, ["original", "translation", "note"]);
+      if (path.endsWith("._glossary")) return builderObjectsValue(builderGetPath(path.slice(0, -10))?.glossary, ["word", "translation", "explanation"]);
       if (path.endsWith("._notes")) return builderObjectsValue(builderGetPath(path.slice(0, -7))?.grammar_notes, ["phrase", "explanation"]);
       return builderGetPath(path);
     }
@@ -1668,6 +1762,7 @@
       builderRedo = [];
       builderErrors = {};
       builderAi = builderAiNewState();
+      builderAi.selectedBlock = lesson.blocks.length ? 0 : null;
       builderDirty = false;
       builderPromptDismissed = true;
       builderHideDraftPrompt();
@@ -1882,8 +1977,9 @@
       if (event.target.closest("[data-builder-ai-whole]")) {
         event.preventDefault();
         if (!builderAi || builderAi.busy || builderAi.pending) return;
+        const task = String(document.getElementById("builderAiTask")?.value || "").trim() || t("builder_ai_whole_task");
         builderAi.open = true;
-        void builderAiRunRequest({ mode: "lesson", task: t("builder_ai_whole_task") });
+        void builderAiRunRequest({ mode: "lesson", task });
         return;
       }
       if (event.target.closest("[data-builder-ai-cancel]")) {

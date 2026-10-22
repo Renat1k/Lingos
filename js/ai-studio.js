@@ -1898,7 +1898,11 @@
       ];
       if (answers.count) lines.push(`Vocabulary words: ${answers.count}.`);
       if (answers.length) lines.push(`Story length: ${answers.length}.`);
-      if (type === "lessons") lines.push(`Blocks: ${blocks}.`);
+      if (type === "lessons") {
+        lines.push(`Blocks: ${blocks}.`);
+        lines.push("Theory: include key_phrases (original first, then translation, optional note) and an optional fun_fact.");
+        lines.push("Reading blocks: include glossary (max 8 items: word, translation, explanation; word must match the text).");
+      }
       if (weak) lines.push(`Learner weak areas: ${weak}.`);
       lines.push(`Return one JSON object with only the "${type}" array.`);
       if (options.previous) lines.push(`Previous result JSON: ${JSON.stringify(options.previous).slice(0, 12000)}`);
@@ -2395,6 +2399,13 @@
       if (!Array.isArray(lesson.blocks) || !lesson.blocks.length) throw geminiError("validation");
       lesson.blocks.forEach((block) => {
         if (!block || !allowed.includes(block.type)) throw geminiError("validation");
+        if (block.type === "theory") {
+          block.key_phrases = (Array.isArray(block.key_phrases) ? block.key_phrases : []).slice(0, 8);
+          block.fun_fact = String(block.fun_fact || "").trim();
+        }
+        if (block.type === "reading_heavy") {
+          block.glossary = (Array.isArray(block.glossary) ? block.glossary : []).slice(0, 8);
+        }
         if (block.type === "quiz") {
           if (!Array.isArray(block.questions) || !block.questions.length) throw geminiError("validation");
           block.questions.forEach((question) => {

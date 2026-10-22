@@ -33,6 +33,10 @@
                 eyebrow: "01 · CORE MODEL",
                 title: "Как поддержать разговор",
                 content: "Короткая фраза + вопрос возвращает инициативу собеседнику.",
+                key_phrases: [
+                  { original: "That sounds great. What happened next?", translation: "Звучит отлично. Что случилось потом?", note: "Реакция + встречный вопрос." }
+                ],
+                fun_fact: "В английском small talk чаще начинается с вопроса, а не с утверждения.",
                 rule_lines: [
                   { tone: "cyan", prompt: "pattern", text: "That sounds + adjective." },
                   { tone: "emerald", prompt: "follow-up", text: "What happened next?" }
@@ -64,6 +68,10 @@
             subtitle: "Короткая история для чтения в дороге.",
             read_time: "3 мин",
             level: "A2",
+            glossary: [
+              { word: "window", translation: "окно", explanation: "A framed opening in a wall." },
+              { word: "rain", translation: "дождь", explanation: "Water falling from clouds." }
+            ],
             text: "<p>On the train, a small <span class=\"vocab\" data-translation=\"окно\" data-pos=\"существительное\">window</span> framed the rain. She opened her notebook and wrote one honest sentence.</p>"
           }
         ]
@@ -90,6 +98,11 @@
                 ],
                 formulas: [{ label: "Present Perfect", structure: "have/has + V3", example: "I have finished.", note: "Результат важен сейчас." }],
                 mistakes: [{ bad: "I have saw it.", good: "I have seen it.", why: "После have нужен V3." }],
+                key_phrases: [
+                  { original: "I have finished.", translation: "Я закончил.", note: "Результат важен сейчас." },
+                  { original: "She has just arrived.", translation: "Она только что пришла.", note: "just усиливает свежесть результата." }
+                ],
+                fun_fact: "Present Perfect не называет точное время — оно либо неизвестно, либо неважно.",
                 tip: "Начинай с результата, затем добавляй контекст."
               },
               {
@@ -100,6 +113,10 @@
                 intro: "Короткий текст с интерактивным глоссарием.",
                 word_count_label: "≈ 120 слов · 2 минуты",
                 glossary_hint: "Нажми на подчёркнутое слово, чтобы увидеть перевод.",
+                glossary: [
+                  { word: "window", translation: "окно", explanation: "A framed opening in a wall." },
+                  { word: "rhythm", translation: "ритм", explanation: "A regular repeated pattern of sound." }
+                ],
                 text: "<p>She opened the <span class=\"vocab\" data-translation=\"окно\" data-pos=\"существительное\">window</span> and listened to the rain. A familiar <span class=\"vocab\" data-translation=\"ритм\" data-pos=\"существительное\">rhythm</span> filled the room.</p>"
               },
               {

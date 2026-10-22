@@ -21,6 +21,17 @@
       }
     }
 
+    function normalizeGlossary(items) {
+      return (Array.isArray(items) ? items : [])
+        .map((item) => ({
+          word: String(item?.word || "").trim(),
+          translation: String(item?.translation || "").trim(),
+          explanation: String(item?.explanation || "").trim()
+        }))
+        .filter((item) => item.word)
+        .slice(0, 8);
+    }
+
     function nextLessonId() {
       return state.lessons.reduce((max, lesson) => Math.max(max, Number(lesson.id) || 0), 0) + 1;
     }
@@ -42,6 +53,18 @@
         const clean = { ...block };
         if (clean.type === "reading_heavy" && typeof clean.text === "string") {
           clean.text = sanitizeRichText(clean.text);
+          clean.glossary = normalizeGlossary(clean.glossary);
+        }
+        if (clean.type === "theory") {
+          clean.key_phrases = (Array.isArray(clean.key_phrases) ? clean.key_phrases : [])
+            .map((item) => ({
+              original: String(item?.original || "").trim(),
+              translation: String(item?.translation || "").trim(),
+              note: String(item?.note || "").trim()
+            }))
+            .filter((item) => item.original || item.translation)
+            .slice(0, 8);
+          clean.fun_fact = String(clean.fun_fact || "").trim();
         }
         return clean;
       }).filter(Boolean);
@@ -63,7 +86,8 @@
         subtitle: String(raw.subtitle || ""),
         read_time: String(raw.read_time || "6 мин"),
         level: String(raw.level || "B1"),
-        text: sanitizeRichText(raw.text)
+        text: sanitizeRichText(raw.text),
+        glossary: normalizeGlossary(raw.glossary)
       };
     }
 

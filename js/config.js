@@ -1604,6 +1604,48 @@
       Object.assign(UI_TRANSLATIONS[language], dictionary);
     });
 
+    const E6_UI_TRANSLATIONS = {
+      ru: {
+        theory_key_phrases: "Разбираем", theory_fun_fact: "Интересно знать",
+        builder_key_phrases: "Ключевые фразы", builder_key_phrases_hint: "original | translation | note — по одной в строке",
+        builder_fun_fact: "Интересно знать", builder_glossary: "Глоссарий", builder_glossary_hint_form: "word | translation | explanation — по одной в строке",
+        gloss_add: "Добавить в словарь", gloss_added: "Добавлено в словарь", gloss_merged: "Слово уже было — объединено",
+        gloss_show: "Показать перевод", gloss_close: "Закрыть", gloss_invalid: "Не удалось определить слово",
+        builder_ai_validation_detail: "Данные не прошли проверку: {details}",
+        builder_ai_truncated: "Ответ ИИ обрезан ({n} символов). Урок не изменён.", builder_ai_empty: "ИИ вернул пустой ответ."
+      },
+      en: {
+        theory_key_phrases: "Let's break it down", theory_fun_fact: "Good to know",
+        builder_key_phrases: "Key phrases", builder_key_phrases_hint: "original | translation | note — one per line",
+        builder_fun_fact: "Good to know", builder_glossary: "Glossary", builder_glossary_hint_form: "word | translation | explanation — one per line",
+        gloss_add: "Add to vocabulary", gloss_added: "Added to vocabulary", gloss_merged: "Word already existed — merged",
+        gloss_show: "Show translation", gloss_close: "Close", gloss_invalid: "Could not determine the word",
+        builder_ai_validation_detail: "Data failed validation: {details}",
+        builder_ai_truncated: "The AI response was truncated ({n} characters). The lesson was not changed.", builder_ai_empty: "The AI returned an empty response."
+      },
+      da: {
+        theory_key_phrases: "Lad os se på det", theory_fun_fact: "Godt at vide",
+        builder_key_phrases: "Nøglefraser", builder_key_phrases_hint: "original | translation | note — én pr. linje",
+        builder_fun_fact: "Godt at vide", builder_glossary: "Ordliste", builder_glossary_hint_form: "word | translation | explanation — én pr. linje",
+        gloss_add: "Føj til ordforråd", gloss_added: "Føjet til ordforråd", gloss_merged: "Ordet fandtes allerede — flettet",
+        gloss_show: "Vis oversættelse", gloss_close: "Luk", gloss_invalid: "Kunne ikke bestemme ordet",
+        builder_ai_validation_detail: "Data bestod ikke valideringen: {details}",
+        builder_ai_truncated: "AI-svaret blev afkortet ({n} tegn). Lektionen blev ikke ændret.", builder_ai_empty: "AI returnerede et tomt svar."
+      },
+      tr: {
+        theory_key_phrases: "İnceleyelim", theory_fun_fact: "Bilmekte fayda var",
+        builder_key_phrases: "Anahtar ifadeler", builder_key_phrases_hint: "original | translation | note — her satırda bir tane",
+        builder_fun_fact: "Bilmekte fayda var", builder_glossary: "Sözlük", builder_glossary_hint_form: "word | translation | explanation — her satırda bir tane",
+        gloss_add: "Sözlüğe ekle", gloss_added: "Sözlüğe eklendi", gloss_merged: "Kelime zaten vardı — birleştirildi",
+        gloss_show: "Çeviriyi göster", gloss_close: "Kapat", gloss_invalid: "Kelime belirlenemedi",
+        builder_ai_validation_detail: "Veriler doğrulamadan geçmedi: {details}",
+        builder_ai_truncated: "Yapay zekâ yanıtı kesildi ({n} karakter). Ders değiştirilmedi.", builder_ai_empty: "Yapay zekâ boş yanıt döndürdü."
+      }
+    };
+    Object.entries(E6_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
     function t(key, vars) {
       const language = UI_LANGUAGES[state.settings.uiLanguage] ? state.settings.uiLanguage : "ru";
       const dictionary = UI_TRANSLATIONS[language] || UI_TRANSLATIONS.ru;

@@ -14,6 +14,66 @@
       }[char]));
     }
 
+    function escapeRegExp(value) {
+      return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function decorateGlossary(html, glossary) {
+      const source = typeof sanitizeRichText === "function" ? sanitizeRichText(String(html || "")) : String(html || "");
+      const entries = (Array.isArray(glossary) ? glossary : [])
+        .map((item, index) => ({
+          index,
+          word: String(item?.word || "").trim(),
+          translation: String(item?.translation || "").trim(),
+          explanation: String(item?.explanation || "").trim()
+        }))
+        .filter((item) => item.word)
+        .slice(0, 8)
+        .sort((a, b) => b.word.length - a.word.length);
+      if (!entries.length || !source) return source;
+      const byWord = new Map(entries.map((item) => [item.word.toLocaleLowerCase(), item]));
+      const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])(${entries.map((item) => escapeRegExp(item.word)).join("|")})(?=$|[^\\p{L}\\p{N}_])`, "giu");
+      try {
+        const doc = new DOMParser().parseFromString(source, "text/html");
+        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach((node) => {
+          const parent = node.parentElement;
+          if (!parent || parent.closest("span.vocab, span.gloss, a, code, pre, script, style, textarea, button, b, i, strong, em")) return;
+          const text = node.nodeValue || "";
+          pattern.lastIndex = 0;
+          if (!pattern.test(text)) return;
+          pattern.lastIndex = 0;
+          const fragment = doc.createDocumentFragment();
+          let lastIndex = 0;
+          text.replace(pattern, (match, prefix, word, offset) => {
+            const entry = byWord.get(String(word).toLocaleLowerCase());
+            if (!entry) return match;
+            const start = offset + prefix.length;
+            if (start > lastIndex) fragment.appendChild(doc.createTextNode(text.slice(lastIndex, start)));
+            const span = doc.createElement("span");
+            span.className = "gloss";
+            span.dataset.gloss = String(entry.index);
+            span.dataset.glossTranslation = entry.translation;
+            span.dataset.glossExplanation = entry.explanation;
+            span.tabIndex = 0;
+            span.setAttribute("role", "button");
+            span.setAttribute("aria-label", `${entry.word}: ${entry.translation || "—"}. ${t("gloss_show")}`);
+            span.textContent = word;
+            fragment.appendChild(span);
+            lastIndex = start + word.length;
+            return match;
+          });
+          if (lastIndex < text.length) fragment.appendChild(doc.createTextNode(text.slice(lastIndex)));
+          if (lastIndex > 0) node.parentNode.replaceChild(fragment, node);
+        });
+        return doc.body.innerHTML;
+      } catch (error) {
+        return source;
+      }
+    }
+
     function icon(name, className) {
       return `<svg class="${className || "icon"}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
     }

@@ -1283,6 +1283,109 @@
     });
     document.getElementById("vocabUndoButton")?.addEventListener("click", undoVocabMerge);
 
+    /* ---------- glossary popover ---------- */
+
+    let glossLastFocus = null;
+
+    function closeGlossPopover(restoreFocus = true) {
+      const popover = document.getElementById("glossPopover");
+      if (!popover || popover.hidden) return;
+      popover.hidden = true;
+      if (restoreFocus && glossLastFocus && typeof glossLastFocus.focus === "function") {
+        glossLastFocus.focus({ preventScroll: true });
+      }
+      glossLastFocus = null;
+    }
+
+    function openGlossPopover(element) {
+      const popover = document.getElementById("glossPopover");
+      if (!popover) return;
+      glossLastFocus = document.activeElement;
+      const word = String(element.dataset.glossWord || element.textContent || "").trim();
+      const translation = String(element.dataset.glossTranslation || "").trim();
+      const explanation = String(element.dataset.glossExplanation || "").trim();
+      document.getElementById("glossWord").textContent = word;
+      document.getElementById("glossTranslation").textContent = translation;
+      document.getElementById("glossExplanation").textContent = explanation;
+      document.getElementById("glossAdd").textContent = t("gloss_add");
+      document.getElementById("glossClose").textContent = t("gloss_close");
+      popover.hidden = false;
+      document.getElementById("glossAdd")?.focus({ preventScroll: true });
+    }
+
+    function addGlossWordToVocabulary() {
+      const wordElement = document.getElementById("glossWord");
+      const translationElement = document.getElementById("glossTranslation");
+      const explanationElement = document.getElementById("glossExplanation");
+      const word = cleanWordForSave(wordElement?.textContent || "", state.language);
+      const translation = String(translationElement?.textContent || "").trim();
+      if (!word || !translation) {
+        showToast(t("gloss_invalid"), "error");
+        return;
+      }
+      const now = new Date().toISOString();
+      const existing = state.vocab.find((item) => wordKey(item.word, state.language) === wordKey(word, state.language));
+      if (existing) {
+        mergeWordData(existing, {
+          word,
+          translation,
+          description: String(explanationElement?.textContent || "").trim(),
+          tags: [],
+          is_favorite: false
+        });
+        existing.updated_at = now;
+        saveVocabulary();
+        showToast(t("gloss_merged"), "info");
+      } else {
+        state.vocab.push({
+          id: nextVocabId(),
+          word,
+          translation,
+          description: String(explanationElement?.textContent || "").trim(),
+          tags: [],
+          is_favorite: false,
+          box_level: 1,
+          next_review_at: "",
+          example: "",
+          created_at: now,
+          updated_at: now
+        });
+        saveVocabulary();
+        showToast(t("gloss_added"), "success");
+      }
+      if (state.view === "vocabulary") {
+        renderVocabTagChips();
+        renderVocabResults();
+        updateVocabStats();
+      }
+      closeGlossPopover();
+    }
+
+    document.addEventListener("click", (event) => {
+      const gloss = event.target.closest(".gloss");
+      if (gloss) {
+        event.preventDefault();
+        openGlossPopover(gloss);
+        return;
+      }
+      const popover = document.getElementById("glossPopover");
+      if (popover && !popover.hidden && !popover.contains(event.target)) closeGlossPopover();
+    });
+
+    document.getElementById("glossAdd")?.addEventListener("click", addGlossWordToVocabulary);
+    document.getElementById("glossClose")?.addEventListener("click", () => closeGlossPopover());
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeGlossPopover();
+        return;
+      }
+      const gloss = event.target.closest?.(".gloss");
+      if (gloss && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        openGlossPopover(gloss);
+      }
+    });
+
     function downloadVocabulary() {
       const language = currentLanguage();
       const payload = {

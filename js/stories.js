@@ -515,7 +515,7 @@
               <span class="reading-length">${icon("clock")} ${escapeHtml(story.read_time || "6 мин")} чтения</span>
               <span class="glossary-pill"><span class="dot" aria-hidden="true"></span><strong data-vocab-count>0 / ${vocab}</strong> слов открыто</span>
             </div>
-            <div class="reading-prose story-prose" data-ai-selectable="story">${story.text || ""}</div>
+            <div class="reading-prose story-prose" data-ai-selectable="story">${decorateGlossary(story.text || "", story.glossary)}</div>
             <div class="story-read-footer">
               <button class="btn btn-save story-read-button${read ? " is-read" : ""}" type="button" data-mark-story data-story-id="${Number(story.id)}" aria-pressed="${read ? "true" : "false"}">
                 ${read ? `${icon("check")} Прочитано` : `${icon("book")} Отметить прочитанным`}
