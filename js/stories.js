@@ -151,7 +151,7 @@
       `;
     }
 
-    let speechState = { active: false, paused: false, queue: [], index: 0, utterance: null, target: null, token: 0, words: [], activeWord: null, currentWordIndex: -1 };
+    let speechState = { active: false, paused: false, queue: [], index: 0, utterance: null, target: null, token: 0, words: [], activeWord: null, currentWordIndex: -1, wordTimer: null, boundaryCount: 0, boundaryReliable: false, sentenceEnd: 0 };
 
     function speechSentenceParts(text) {
       const source = String(text || "");
@@ -233,6 +233,37 @@
       active?.classList.add("speaking-word-active");
     }
 
+    function clearSpeechWordTimer() {
+      if (speechState.wordTimer) {
+        window.clearTimeout(speechState.wordTimer);
+        speechState.wordTimer = null;
+      }
+    }
+
+    function speechWordDelay(word) {
+      const length = String(word?.textContent || "").length;
+      return Math.max(220, Math.round((180 + length * 45) / Math.max(0.6, getSpeechRate())));
+    }
+
+    function scheduleSpeechWordFallback(token) {
+      clearSpeechWordTimer();
+      if (!speechState.active || speechState.paused || speechState.boundaryReliable) return;
+      if (token !== speechState.token) return;
+      const words = speechState.words || [];
+      const current = words[speechState.currentWordIndex];
+      const delay = speechWordDelay(current);
+      speechState.wordTimer = window.setTimeout(() => {
+        speechState.wordTimer = null;
+        if (!speechState.active || speechState.paused || token !== speechState.token) return;
+        if (speechState.boundaryReliable) return;
+        const nextIndex = speechState.currentWordIndex + 1;
+        const next = words[nextIndex];
+        if (!next || Number(next.dataset.speechStart) >= speechState.sentenceEnd) return;
+        highlightSpeechWord(Number(next.dataset.speechStart), token);
+        scheduleSpeechWordFallback(token);
+      }, delay);
+    }
+
     function speechControlsFor(target) {
       const container = target?.closest(".reading-card, .story-reader, .lesson-block");
       return container?.querySelector("[data-speech-controls]") || null;
@@ -265,10 +296,13 @@
       speechState.paused = false;
       speechState.queue = [];
       speechState.index = 0;
+      clearSpeechWordTimer();
       speechState.utterance = null;
       speechState.activeWord?.classList.remove("speaking-word-active");
       speechState.activeWord = null;
       speechState.currentWordIndex = -1;
+      speechState.boundaryReliable = false;
+      speechState.boundaryCount = 0;
       speechState.words = [];
       speechState.target?.classList.remove("speaking-highlight");
       speechState.target = null;
@@ -308,6 +342,7 @@
       if (speechState.index >= speechState.queue.length) {
         speechState.active = false;
         speechState.paused = false;
+        clearSpeechWordTimer();
         speechState.utterance = null;
         speechState.activeWord?.classList.remove("speaking-word-active");
         speechState.activeWord = null;
@@ -315,20 +350,35 @@
         updateSpeechControls();
         return;
       }
+      clearSpeechWordTimer();
       const sentence = speechState.queue[speechState.index];
+      const nextSentence = speechState.queue[speechState.index + 1];
+      speechState.sentenceEnd = nextSentence?.start ?? String(speechState.target?.textContent || "").length;
+      speechState.boundaryCount = 0;
+      speechState.boundaryReliable = false;
       const utterance = new SpeechSynthesisUtterance(sentence.text);
       utterance.lang = speechLocale();
       utterance.rate = getSpeechRate();
       if (speechState.voice) {
         try { utterance.voice = speechState.voice; } catch (error) { /* voice may be a plain test object */ }
       }
-      utterance.onstart = () => highlightSpeechWord(sentence.start, token);
+      utterance.onstart = () => {
+        highlightSpeechWord(sentence.start, token);
+        scheduleSpeechWordFallback(token);
+      };
       utterance.onboundary = (event) => {
         if (event?.name && event.name !== "word") return;
         speechState.boundary = Number(event?.charIndex) || 0;
+        speechState.boundaryCount += 1;
+        if (speechState.boundaryCount >= 2) {
+          speechState.boundaryReliable = true;
+          clearSpeechWordTimer();
+        }
         highlightSpeechWord(sentence.start + speechState.boundary, token);
+        if (!speechState.boundaryReliable) scheduleSpeechWordFallback(token);
       };
       utterance.onend = () => {
+        clearSpeechWordTimer();
         if (token !== speechState.token) return;
         speechState.index += 1;
         speakNext(token);
@@ -399,6 +449,7 @@
       if (!speechSupported() || !speechState.active || speechState.paused) return;
       try { window.speechSynthesis.pause(); } catch (error) { /* pause unavailable */ }
       speechState.paused = true;
+      clearSpeechWordTimer();
       updateSpeechControls();
     }
 
@@ -436,6 +487,7 @@
         if (!speechState.active || token !== speechState.token) return;
         const synth = window.speechSynthesis;
         if (synth.paused || (!synth.speaking && !synth.pending)) restartSpeechFromSavedWord();
+        else scheduleSpeechWordFallback(token);
       }, 260);
     }
 
