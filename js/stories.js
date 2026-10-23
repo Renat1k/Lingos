@@ -90,7 +90,7 @@
       return Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
     }
 
-    function speechLocale() {
+    function speechLanguageInfo() {
       let code = String(state.language || "").trim();
       if (!SPEECH_LANGUAGE_BCP47[code]) {
         const lower = code.toLocaleLowerCase();
@@ -98,14 +98,17 @@
           String(meta.label || "").toLocaleLowerCase() === lower || String(meta.native || "").toLocaleLowerCase() === lower);
         if (match) code = match[0];
       }
-      if (typeof vocabularySpeechLanguageInfo === "function") {
-        const info = vocabularySpeechLanguageInfo(code);
-        return info.regionTag || info.baseTag || "en-US";
-      }
+      if (typeof vocabularySpeechLanguageInfo === "function") return vocabularySpeechLanguageInfo(code);
       const pack = state.languagePacks?.[code];
       const flagLanguage = pack?.flagCode ? SPEECH_COUNTRY_LANGUAGES[pack.flagCode] : "";
       const base = flagLanguage || code;
-      return SPEECH_LANGUAGE_BCP47[base] || (base ? `${base}-${base.toUpperCase()}` : "en-US");
+      const baseTag = SPEECH_LANGUAGE_BCP47[base] || (base ? `${base}-${base.toUpperCase()}` : "en-US");
+      return { code, language: base, aliases: [base], baseTag, regionTag: baseTag, flagCode: pack?.flagCode || "", label: languageLabel(code) || code };
+    }
+
+    function speechLocale() {
+      const info = speechLanguageInfo();
+      return info?.regionTag || info?.baseTag || "en-US";
     }
 
     function getSpeechRate() {
@@ -291,10 +294,12 @@
     }
 
     function pickSpeechVoice(voices, locale) {
-      const wanted = locale.toLowerCase();
+      const normalize = (value) => String(value || "").replace(/_/g, "-").toLowerCase();
+      const wanted = normalize(locale);
       const base = wanted.split("-")[0];
-      return voices.find((voice) => String(voice.lang || "").toLowerCase() === wanted)
-        || voices.find((voice) => String(voice.lang || "").toLowerCase().startsWith(`${base}-`))
+      return voices.find((voice) => normalize(voice.lang) === wanted)
+        || voices.find((voice) => normalize(voice.lang).startsWith(`${base}-`))
+        || voices.find((voice) => normalize(voice.lang).split("-")[0] === base)
         || null;
     }
 
@@ -349,12 +354,35 @@
       stopSpeech();
       const token = speechState.token + 1;
       speechState.token = token;
-      const voices = await loadSpeechVoices();
-      if (token !== speechState.token) return;
-      const voice = pickSpeechVoice(voices, speechLocale());
+      const info = speechLanguageInfo();
+      let voice = null;
+
+      if (info && typeof ensureVocabularySpeechVoices === "function") {
+        await ensureVocabularySpeechVoices();
+        if (token !== speechState.token) return;
+        if (typeof speechVoiceFor === "function") voice = speechVoiceFor(info);
+      }
+
       if (!voice) {
-        showToast(t("speech_voice_missing"), "error");
-        return;
+        const voices = await loadSpeechVoices();
+        if (token !== speechState.token) return;
+        if (typeof resolveVocabularySpeechVoices === "function") {
+          resolveVocabularySpeechVoices();
+          if (typeof speechVoiceFor === "function") voice = speechVoiceFor(info);
+        }
+        if (!voice) voice = pickSpeechVoice(voices, speechLocale());
+      }
+
+      /* A missing Voice object must not block playback: utterance.lang is
+         enough for the platform default voice, especially on mobile. */
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[LINGUA/TTS]", {
+          language: state.language,
+          locale: speechLocale(),
+          voices: (typeof getVocabularySpeechVoices === "function" ? getVocabularySpeechVoices() : [])
+            .map((item) => ({ lang: item.lang, name: item.name, local: item.localService })),
+          selected: voice ? { lang: voice.lang, name: voice.name } : null
+        });
       }
       speechState.active = true;
       speechState.paused = false;
@@ -449,6 +477,72 @@
 
     document.addEventListener("close", stopSpeech, true);
     window.addEventListener("pagehide", stopSpeech);
+
+
+    function initSpeechDebugPanel() {
+      let params;
+      try { params = new URLSearchParams(window.location.search); } catch (error) { return; }
+      if (params.get("tts-debug") !== "1") return;
+      const panel = document.createElement("div");
+      panel.style.cssText = "position:fixed;z-index:99999;left:8px;right:8px;bottom:84px;max-height:60vh;overflow:auto;padding:12px;border:1px solid #3b82f6;border-radius:12px;background:rgba(9,10,15,.97);color:#fff;font:12px/1.45 monospace;box-shadow:0 12px 40px rgba(0,0,0,.5)";
+      const title = document.createElement("strong");
+      title.textContent = "LINGUA / TTS DEBUG";
+      const info = document.createElement("pre");
+      info.style.cssText = "margin:8px 0;white-space:pre-wrap;word-break:break-word;color:#e6edf3";
+      const status = document.createElement("p");
+      status.style.cssText = "margin:6px 0;color:#93c5fd";
+      const actions = document.createElement("div");
+      actions.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+      const refresh = document.createElement("button");
+      refresh.type = "button"; refresh.textContent = "Refresh";
+      const test = document.createElement("button");
+      test.type = "button"; test.textContent = "Test voice";
+      const close = document.createElement("button");
+      close.type = "button"; close.textContent = "Close";
+      [refresh, test, close].forEach((button) => {
+        button.style.cssText = "min-height:36px;padding:0 12px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#fff;font:inherit;cursor:pointer";
+      });
+      const refreshInfo = () => {
+        const details = speechLanguageInfo();
+        const voices = typeof getVocabularySpeechVoices === "function" ? getVocabularySpeechVoices() : [];
+        const selected = details && typeof speechVoiceFor === "function" ? speechVoiceFor(details) : null;
+        const synth = window.speechSynthesis;
+        info.textContent = [
+          `language: ${state.language || "—"} (${details?.label || "—"})`,
+          `locale: ${speechLocale()}`,
+          `supported: ${speechSupported()}`,
+          `voices: ${voices.length}`,
+          `selected: ${selected ? `${selected.lang} · ${selected.name}` : "NONE"}`,
+          `synth: speaking=${Boolean(synth?.speaking)} pending=${Boolean(synth?.pending)} paused=${Boolean(synth?.paused)}`,
+          "",
+          ...voices.map((voice) => `- ${voice.lang || "?"} · ${voice.name || "?"} · local=${voice.localService !== false}`)
+        ].join("\n");
+      };
+      refresh.addEventListener("click", refreshInfo);
+      test.addEventListener("click", () => {
+        if (!speechSupported()) { status.textContent = "speechSynthesis is not supported"; return; }
+        const sample = speechLocale().startsWith("tr") ? "Merhaba. Bu bir ses testidir." : "This is a voice test.";
+        const utterance = new SpeechSynthesisUtterance(sample);
+        utterance.lang = speechLocale();
+        const details = speechLanguageInfo();
+        const voice = details && typeof speechVoiceFor === "function" ? speechVoiceFor(details) : null;
+        try { if (voice) utterance.voice = voice; } catch (error) { /* ignore */ }
+        utterance.onstart = () => { status.textContent = "TEST: started"; };
+        utterance.onend = () => { status.textContent = "TEST: finished"; };
+        utterance.onerror = (event) => { status.textContent = `TEST: error ${event?.error || "unknown"}`; };
+        status.textContent = "TEST: requested…";
+        window.speechSynthesis.speak(utterance);
+      });
+      close.addEventListener("click", () => panel.remove());
+      actions.append(refresh, test, close);
+      panel.append(title, info, status, actions);
+      document.body.append(panel);
+      refreshInfo();
+      window.speechSynthesis?.addEventListener?.("voiceschanged", refreshInfo);
+    }
+
+
+    initSpeechDebugPanel();
 
     function storyReadKey(storyId) {
       return languageKey(`story_read_${storyId}`);
