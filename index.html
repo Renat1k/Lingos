@@ -4,7 +4,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#09090b" />
+  <meta name="theme-color" content="#FAF8F5" />
   <meta name="google-client-id" content="890082377108-ntk8gi1id7utibvc4p9emrrod1oildas.apps.googleusercontent.com" />
   <!-- Cloud Sync: Supabase project for cross-device sync. -->
   <meta name="supabase-url" content="https://zwrptehythksuekxxdih.supabase.co" />
@@ -15,15 +15,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=2.25" />
+  <link rel="stylesheet" href="css/style.css?v=2.36" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
     try {
       const saved = JSON.parse(localStorage.getItem("lingua_ui_settings") || "{}");
-      const themes = ["glass", "cyber", "hacker", "nordic"];
-      document.documentElement.dataset.theme = themes.includes(saved.theme) ? saved.theme : "glass";
+      const themes = ["light", "dark"];
+      const legacyDark = ["glass", "cyber", "hacker", "nordic"];
+      const preferred = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      const theme = themes.includes(saved.theme) ? saved.theme : legacyDark.includes(saved.theme) ? "dark" : preferred;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.accent = saved.accent === "emerald" ? "emerald" : "blue";
+      document.documentElement.dataset.mode = saved.mode === "advanced" ? "advanced" : "simple";
     } catch (error) {
-      document.documentElement.dataset.theme = "glass";
+      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.accent = "blue";
+      document.documentElement.dataset.mode = "simple";
     }
   </script>
   </head>
@@ -50,10 +57,15 @@
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
     <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
     <symbol id="i-archive" viewBox="0 0 24 24"><path d="M4 7h16v13H4zM3 3h18v4H3zM9 12h6"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 11v6M14 11v6"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10.1 3.05V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88V9c.22.63.81 1.08 1.48 1.1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M17 8a5 5 0 0 1 0 8"/></symbol>
     <symbol id="i-volume-waves" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 8a5 5 0 0 1 0 8"/><path d="M19 5a9 9 0 0 1 0 14"/></symbol>
   </svg>
@@ -118,6 +130,55 @@
     </div>
     <div class="top-progress" aria-hidden="true"><span id="topProgressBar"></span></div>
   </header>
+
+  <aside class="app-sidebar" id="appSidebar" aria-label="LINGUA/OS">
+    <div class="sidebar-top">
+      <a class="sidebar-brand" href="#home" data-app-section="home">
+        <span class="sidebar-logo" aria-hidden="true">&gt;_</span>
+        <span class="sidebar-brand-copy">
+          <strong>LINGUA/OS</strong>
+          <small data-i18n="sidebar_slogan">Языки без лишнего шума</small>
+        </span>
+      </a>
+      <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-controls="appSidebar" aria-expanded="true" aria-label="Свернуть меню">
+        <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg>
+      </button>
+    </div>
+    <div class="sidebar-search">
+      <span class="sidebar-search-icon" aria-hidden="true">⌕</span>
+      <input id="globalSearch" type="search" data-i18n-placeholder="search_placeholder" placeholder="Поиск по урокам и словам" aria-label="Поиск" autocomplete="off" />
+      <div class="sidebar-search-results" id="globalSearchResults" hidden></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-group">
+        <div class="sidebar-group-label" data-i18n="nav_group_learn">Учиться</div>
+        <button class="sidebar-link is-active" type="button" data-app-section="home" aria-current="page"><span aria-hidden="true">🏠</span><span data-i18n="nav_home">Главная</span></button>
+        <button class="sidebar-link" type="button" data-app-section="lessons"><span aria-hidden="true">📚</span><span data-i18n="nav_lessons">Уроки</span></button>
+        <button class="sidebar-link" type="button" data-app-section="practice"><span aria-hidden="true">🔁</span><span data-i18n="nav_practice">Практика и повторение</span></button>
+        <button class="sidebar-link" type="button" data-app-section="vocabulary"><span aria-hidden="true">📖</span><span data-i18n="nav_my_vocabulary">Мой словарь</span></button>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label" data-i18n="nav_group_tools">Инструменты</div>
+        <button class="sidebar-link" type="button" data-create-lesson><span aria-hidden="true">✏️</span><span data-i18n="builder_create_lesson">Создать урок</span></button>
+        <button class="sidebar-link" type="button" data-open-import data-advanced-only><span aria-hidden="true">📥</span><span data-i18n="import_json">Импорт</span></button>
+        <button class="sidebar-link" type="button" data-open-ai-studio data-advanced-only><span aria-hidden="true">✨</span><span data-i18n="nav_ai_studio">ИИ-студия</span></button>
+        <button class="sidebar-link" type="button" data-sidebar-settings><span aria-hidden="true">⚙️</span><span data-i18n="settings">Настройки</span></button>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label" data-i18n="nav_group_progress">Прогресс</div>
+        <button class="sidebar-link" type="button" data-app-section="progress"><span aria-hidden="true">📈</span><span data-i18n="nav_progress">Мой прогресс</span></button>
+      </div>
+    </nav>
+    <p class="sidebar-note" data-i18n="sidebar_note">Данные хранятся на этом устройстве. Синхронизация — по желанию.</p>
+  </aside>
+
+  <nav class="mobile-nav" aria-label="LINGUA/OS">
+    <button class="mobile-nav-link is-active" type="button" data-app-section="home"><span aria-hidden="true">🏠</span><span data-i18n="nav_home">Главная</span></button>
+    <button class="mobile-nav-link" type="button" data-app-section="lessons"><span aria-hidden="true">📚</span><span data-i18n="nav_lessons">Уроки</span></button>
+    <button class="mobile-nav-link" type="button" data-app-section="practice"><span aria-hidden="true">🔁</span><span data-i18n="nav_practice_short">Практика</span></button>
+    <button class="mobile-nav-link" type="button" data-app-section="vocabulary"><span aria-hidden="true">📖</span><span data-i18n="nav_vocab_short">Словарь</span></button>
+    <button class="mobile-nav-link" type="button" data-app-section="progress"><span aria-hidden="true">📈</span><span data-i18n="nav_progress">Прогресс</span></button>
+  </nav>
 
   <main id="app">
     <div class="loader" id="loader">
@@ -193,9 +254,10 @@
 
       <div class="settings-body" data-settings-tab="profile">
         <div class="settings-tabs" role="tablist" aria-label="Settings sections" data-i18n-aria="settings_title">
-          <button class="settings-tab is-active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings_tab_profile">👤 Профиль</button>
-          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="appearance" data-i18n="settings_tab_appearance">🎨 Оформление</button>
-          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="system" data-i18n="settings_tab_system">⚙️ Система</button>
+          <button class="settings-tab is-active" type="button" role="tab" aria-selected="true" data-settings-tab="profile" data-i18n="settings_tab_profile">Профиль</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="appearance" data-i18n="settings_tab_appearance">Оформление</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="system" data-i18n="settings_tab_system">Система</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" data-settings-tab="api" data-i18n="settings_tab_api">API Keys</button>
         </div>
 
         <section class="settings-section" data-settings-group="profile" aria-labelledby="accountSettingLabel">
@@ -274,27 +336,22 @@
             <span id="themeSettingLabel" data-i18n="theme">Тема оформления</span>
             <span class="settings-hint">4 PRESETS</span>
           </div>
-          <div class="theme-grid" role="group" aria-label="Тема оформления">
-            <button class="theme-choice is-active" type="button" data-theme-setting="glass" aria-pressed="true">
-              <span class="theme-preview theme-glass" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="theme-copy"><strong>🌌 Dark Glass</strong><small data-i18n="theme_glass_hint">По умолчанию · cyan / emerald</small></span>
+          <div class="theme-grid" role="group" aria-label="Тема оформления" data-i18n-aria="theme">
+            <button class="theme-choice is-active" type="button" data-theme-setting="light" aria-pressed="true">
+              <span class="theme-preview theme-light" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="theme-copy"><strong data-i18n="theme_light">Светлая</strong></span>
               <span class="choice-check" aria-hidden="true"></span>
             </button>
-            <button class="theme-choice" type="button" data-theme-setting="cyber" aria-pressed="false">
-              <span class="theme-preview theme-cyber" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="theme-copy"><strong>👾 Cyberpunk Neon</strong><small data-i18n="theme_cyber_hint">fuchsia / violet glow</small></span>
+            <button class="theme-choice" type="button" data-theme-setting="dark" aria-pressed="false">
+              <span class="theme-preview theme-dark" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="theme-copy"><strong data-i18n="theme_dark">Тёмная</strong></span>
               <span class="choice-check" aria-hidden="true"></span>
             </button>
-            <button class="theme-choice" type="button" data-theme-setting="hacker" aria-pressed="false">
-              <span class="theme-preview theme-hacker" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="theme-copy"><strong>🟩 Hacker Mono</strong><small data-i18n="theme_hacker_hint">console · #00ff66</small></span>
-              <span class="choice-check" aria-hidden="true"></span>
-            </button>
-            <button class="theme-choice" type="button" data-theme-setting="nordic" aria-pressed="false">
-              <span class="theme-preview theme-nordic" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="theme-copy"><strong>⚪ Nordic Minimal</strong><small data-i18n="theme_nordic_hint">quiet slate for reading</small></span>
-              <span class="choice-check" aria-hidden="true"></span>
-            </button>
+          </div>
+          <div class="settings-section-head"><span data-i18n="accent">Акцент</span></div>
+          <div class="accent-grid" role="group" aria-label="Accent" data-i18n-aria="accent">
+            <button class="accent-choice is-active" type="button" data-accent-setting="blue" aria-pressed="true"><span class="accent-dot accent-blue" aria-hidden="true"></span><span data-i18n="accent_blue">Синий</span></button>
+            <button class="accent-choice" type="button" data-accent-setting="emerald" aria-pressed="false"><span class="accent-dot accent-emerald" aria-hidden="true"></span><span data-i18n="accent_emerald">Изумрудный</span></button>
           </div>
         </section>
 
@@ -308,6 +365,24 @@
             <button class="ui-language-choice" type="button" data-ui-language="da" aria-pressed="false"><span>🇩🇰</span> Dansk</button>
             <button class="ui-language-choice" type="button" data-ui-language="tr" aria-pressed="false"><span>🇹🇷</span> Türkçe</button>
             <button class="ui-language-choice" type="button" data-ui-language="ru" aria-pressed="false"><span>🇷🇺</span> Русский</button>
+          </div>
+        </section>
+
+        <section class="settings-section" data-settings-group="appearance" aria-labelledby="modeSettingLabel">
+          <div class="settings-section-head">
+            <span id="modeSettingLabel" data-i18n="mode_title">Режим приложения</span>
+          </div>
+          <div class="settings-segment" role="group" aria-label="Режим приложения" data-i18n-aria="mode_title">
+            <button class="settings-choice is-active" type="button" data-mode-setting="simple" aria-pressed="true">
+              <span class="choice-preview">S</span>
+              <span class="choice-copy"><strong data-i18n="mode_simple">Обычный</strong><small data-i18n="mode_simple_hint">Только то, что нужно для учёбы</small></span>
+              <span class="choice-check" aria-hidden="true"></span>
+            </button>
+            <button class="settings-choice" type="button" data-mode-setting="advanced" aria-pressed="false">
+              <span class="choice-preview">A</span>
+              <span class="choice-copy"><strong data-i18n="mode_advanced">Продвинутый</strong><small data-i18n="mode_advanced_hint">Импорт, редактор и ИИ-инструменты</small></span>
+              <span class="choice-check" aria-hidden="true"></span>
+            </button>
           </div>
         </section>
 
@@ -340,7 +415,7 @@
           </div>
         </section>
 
-        <section class="settings-section" data-settings-group="system" aria-labelledby="geminiSettingLabel">
+        <section class="settings-section" data-settings-group="api" aria-labelledby="geminiSettingLabel">
           <div class="settings-section-head">
             <span id="geminiSettingLabel" data-i18n="gemini_title">Google Gemini API</span>
             <span class="settings-hint">AI / API</span>
@@ -348,7 +423,7 @@
           <p class="settings-help" data-i18n="gemini_hint">Ключ хранится только в этом браузере и не отправляется в облако.</p>
           <div class="gemini-field">
             <input id="geminiKeyInput" type="password" spellcheck="false" autocomplete="off" data-i18n-placeholder="gemini_placeholder" aria-label="Gemini API Key" placeholder="Вставь Gemini API Key" />
-            <button class="icon-btn gemini-toggle" id="geminiToggle" type="button" data-i18n-aria="show" aria-label="Показать ключ">👁</button>
+            <button class="icon-btn gemini-toggle" id="geminiToggle" type="button" data-i18n-aria="show" aria-label="Показать ключ"><svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg></button>
           </div>
           <div class="gemini-actions">
             <button class="btn btn-quiet" id="geminiTest" type="button" data-i18n="check_key">Проверить ключ</button>
@@ -375,7 +450,7 @@
           </div>
         </section>
 
-        <section class="settings-section" data-settings-group="system" aria-labelledby="aiProviderSettingLabel">
+        <section class="settings-section" data-settings-group="api" aria-labelledby="aiProviderSettingLabel">
           <div class="settings-section-head">
             <span id="aiProviderSettingLabel" data-i18n="ai_provider_title">ИИ-провайдер</span>
             <span class="settings-hint">MULTI / API</span>
@@ -649,6 +724,64 @@
     <button class="btn btn-quiet" id="vocabUndoButton" type="button" data-i18n="vocab_undo">Отменить</button>
   </div>
 
+  <dialog class="onboarding-modal" id="onboardingModal" aria-labelledby="onboardingTitle">
+    <div class="onboarding-panel">
+      <header class="onboarding-head">
+        <span class="home-kicker">LINGUA/OS</span>
+        <button class="icon-btn" type="button" data-onboarding-action="skip" data-i18n-aria="onboarding_skip" aria-label="Пропустить"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      </header>
+      <div class="onboarding-step" data-onboarding-step="1">
+        <h2 id="onboardingTitle" data-i18n="onboarding_welcome">Добро пожаловать</h2>
+        <p data-i18n="onboarding_welcome_body">Научимся пользоваться LINGUA/OS за минуту.</p>
+      </div>
+      <div class="onboarding-step" data-onboarding-step="2" hidden>
+        <h2 data-i18n="onboarding_language">Какой язык изучаешь?</h2>
+        <div class="onboarding-choices" id="onboardingLanguages"></div>
+      </div>
+      <div class="onboarding-step" data-onboarding-step="3" hidden>
+        <h2 data-i18n="onboarding_level">Примерный уровень</h2>
+        <div class="onboarding-choices" id="onboardingLevels">
+          <button type="button" class="choice-card" data-onboarding-level="A1">A1</button>
+          <button type="button" class="choice-card" data-onboarding-level="A2">A2</button>
+          <button type="button" class="choice-card" data-onboarding-level="B1">B1</button>
+          <button type="button" class="choice-card" data-onboarding-level="unknown" data-i18n="onboarding_unknown">Не знаю</button>
+        </div>
+      </div>
+      <div class="onboarding-step" data-onboarding-step="4" hidden>
+        <h2 data-i18n="onboarding_guide_title">Как всё устроено</h2>
+        <ol class="onboarding-guide">
+          <li data-i18n="onboarding_guide_1">Выбери урок на главной.</li>
+          <li data-i18n="onboarding_guide_2">Читай, слушай и отмечай слова.</li>
+          <li data-i18n="onboarding_guide_3">Повторяй слова в удобное время.</li>
+        </ol>
+        <p class="settings-help" data-i18n="onboarding_saved">Можно изменить в настройках.</p>
+      </div>
+      <footer class="onboarding-actions">
+        <button class="btn btn-quiet" type="button" data-onboarding-action="skip" data-i18n="onboarding_skip">Пропустить</button>
+        <button class="btn btn-secondary" type="button" data-onboarding-action="back" data-i18n="onboarding_back" hidden>Назад</button>
+        <button class="btn btn-primary" type="button" data-onboarding-action="next" data-i18n="onboarding_next">Дальше</button>
+        <a class="btn btn-secondary" href="#lesson-1" data-onboarding-action="demo" data-i18n="onboarding_demo" hidden>Открыть демо-урок</a>
+        <button class="btn btn-quiet" type="button" data-onboarding-action="login" data-i18n="onboarding_login" hidden>Войти, чтобы сохранить прогресс</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <dialog class="simple-lesson-modal" id="simpleLessonModal" aria-labelledby="simpleLessonTitle">
+    <div class="simple-lesson-panel">
+      <header class="onboarding-head">
+        <div><span class="home-kicker">LINGUA/OS</span><h2 id="simpleLessonTitle" data-i18n="simple_create_title">Что хочешь изучить?</h2></div>
+        <button class="icon-btn" id="simpleLessonClose" type="button" data-i18n-aria="close" aria-label="Закрыть"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+      </header>
+      <p data-i18n="simple_create_lead">Напиши тему простыми словами — остальное соберём сами.</p>
+      <label class="simple-field"><span data-i18n="simple_topic">Тема</span><input id="simpleLessonTopic" type="text" maxlength="120" data-i18n-placeholder="simple_topic_placeholder" placeholder="Например: заказать кофе" /></label>
+      <label class="simple-field"><span data-i18n="simple_goal">Цель</span><select id="simpleLessonGoal"><option value="travel" data-i18n="simple_goal_travel">Для поездок</option><option value="work" data-i18n="simple_goal_work">Для работы</option><option value="talk" data-i18n="simple_goal_talk">Для общения</option><option value="grammar" data-i18n="simple_goal_grammar">Разобраться в грамматике</option></select></label>
+      <label class="simple-field"><span data-i18n="simple_level">Уровень</span><select id="simpleLessonLevel"><option>A1</option><option>A2</option><option selected>B1</option></select></label>
+      <p class="simple-status" id="simpleLessonStatus" aria-live="polite"></p>
+      <div class="simple-actions"><button class="btn btn-primary" id="simpleLessonGenerate" type="button" data-i18n="simple_generate">Создать урок</button></div>
+      <div class="simple-ready" id="simpleReadyLessons"></div>
+    </div>
+  </dialog>
+
   <dialog class="import-modal" id="importModal" aria-labelledby="importTitle">
     <div class="import-panel">
       <header class="import-head">
@@ -767,9 +900,9 @@
     </div>
   </dialog>
 
-  <button class="ai-selection-btn" id="aiAnalyzeBtn" type="button" hidden data-i18n="ai_explain">✨ ИИ-Разбор</button>
+  <button class="ai-selection-btn" id="aiAnalyzeBtn" type="button" hidden data-i18n="ai_explain">ИИ-Разбор</button>
   <div class="ai-selection-bar" id="aiSelectionBar" role="group" hidden data-i18n-aria="ai_selection_actions" aria-label="Действия с выделением">
-    <button class="ai-selection-bar-analyze" id="aiBarAnalyze" type="button" data-i18n="ai_explain">✨ ИИ-Разбор</button>
+    <button class="ai-selection-bar-analyze" id="aiBarAnalyze" type="button" data-i18n="ai_explain">ИИ-Разбор</button>
     <button class="ai-selection-bar-copy" id="aiBarCopy" type="button" data-i18n-aria="ai_selection_copy" aria-label="Копировать">📋</button>
   </div>
 
@@ -856,15 +989,15 @@
       </header>
       <div class="builder-start-options">
         <button class="builder-start-option" type="button" data-create-with-ai>
-          <span class="builder-start-icon" aria-hidden="true">✨</span>
+          <span class="builder-start-icon" aria-hidden="true"><svg class="icon"><use href="#i-spark"></use></svg></span>
           <span><strong data-i18n="builder_create_ai">С помощью ИИ</strong><small data-i18n="builder_create_ai_hint">AI Studio откроется с текущим курсом и типом «Урок».</small></span>
         </button>
         <button class="builder-start-option" type="button" data-create-manual>
-          <span class="builder-start-icon" aria-hidden="true">🛠</span>
+          <span class="builder-start-icon" aria-hidden="true"><svg class="icon"><use href="#i-pen"></use></svg></span>
           <span><strong data-i18n="builder_create_manual">Вручную (Конструктор)</strong><small data-i18n="builder_create_manual_hint">Дружелюбные формы без JSON.</small></span>
         </button>
         <button class="builder-start-option" type="button" data-create-import>
-          <span class="builder-start-icon" aria-hidden="true">📥</span>
+          <span class="builder-start-icon" aria-hidden="true"><svg class="icon"><use href="#i-upload"></use></svg></span>
           <span><strong data-i18n="builder_create_import">Импорт JSON</strong><small data-i18n="builder_create_import_hint">Старое окно импорта и шаблоны.</small></span>
         </button>
       </div>
@@ -906,23 +1039,23 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=2.25"></script>
-  <script src="js/data-default.js?v=2.25"></script>
-  <script src="js/state.js?v=2.25"></script>
-  <script src="js/dom.js?v=2.25"></script>
-  <script src="js/helpers.js?v=2.25"></script>
-  <script src="js/sync.js?v=2.25"></script>
-  <script src="js/auth.js?v=2.25"></script>
-  <script src="js/ai-providers.js?v=2.25"></script>
-  <script src="js/prompts.js?v=2.25"></script>
-  <script src="js/ai-studio.js?v=2.25"></script>
-  <script src="js/ui-settings.js?v=2.25"></script>
-  <script src="js/vocab.js?v=2.25"></script>
-  <script src="js/stories.js?v=2.25"></script>
-  <script src="js/lessons.js?v=2.25"></script>
-  <script src="js/import.js?v=2.25"></script>
-  <script src="js/builder.js?v=2.25"></script>
-  <script src="js/app.js?v=2.25"></script>
+  <script src="js/config.js?v=2.36"></script>
+  <script src="js/data-default.js?v=2.36"></script>
+  <script src="js/state.js?v=2.36"></script>
+  <script src="js/dom.js?v=2.36"></script>
+  <script src="js/helpers.js?v=2.36"></script>
+  <script src="js/sync.js?v=2.36"></script>
+  <script src="js/auth.js?v=2.36"></script>
+  <script src="js/ai-providers.js?v=2.36"></script>
+  <script src="js/prompts.js?v=2.36"></script>
+  <script src="js/ai-studio.js?v=2.36"></script>
+  <script src="js/ui-settings.js?v=2.36"></script>
+  <script src="js/vocab.js?v=2.36"></script>
+  <script src="js/stories.js?v=2.36"></script>
+  <script src="js/lessons.js?v=2.36"></script>
+  <script src="js/import.js?v=2.36"></script>
+  <script src="js/builder.js?v=2.36"></script>
+  <script src="js/app.js?v=2.36"></script>
   <script src="js/reveal.js" defer></script>
 </body>
 </html>

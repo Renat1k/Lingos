@@ -589,6 +589,8 @@
       if (!word) return;
       const text = cleanSpeechWord(word.word);
       button.classList.toggle("is-playing", Boolean(playing));
+      const wordElement = button.closest(".vocab-item")?.querySelector(".vocab-word");
+      wordElement?.classList.toggle("speaking-word-active", Boolean(playing));
       button.setAttribute("aria-pressed", String(Boolean(playing)));
       button.setAttribute("aria-label", t(playing ? "vocab_speak_stop" : "vocab_speak_word", { word: text }));
     }
@@ -902,6 +904,7 @@
       }
       closeTranslation();
       state.view = "vocabulary";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("vocabulary");
       state.lesson = null;
       state.lessonId = null;
       state.story = null;

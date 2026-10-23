@@ -96,10 +96,12 @@
       FLAG_OPTIONS.map((option) => [option.code, option.lang])
     );
     const THEMES = {
-      glass: { label: "Dark Glass" },
-      cyber: { label: "Cyberpunk Neon" },
-      hacker: { label: "Hacker Mono" },
-      nordic: { label: "Nordic Minimal" }
+      light: { label: "Light" },
+      dark: { label: "Dark" }
+    };
+    const ACCENTS = {
+      blue: { label: "Blue" },
+      emerald: { label: "Emerald" }
     };
     const THEME_IDS = Object.keys(THEMES);
     const UI_LANGUAGES = {
@@ -510,7 +512,7 @@
         review_due: "К повторению сегодня: {n}", review_context: "Контекст", review_example: "Пример",
         review_speak: "Озвучить", review_close: "Закрыть", review_restart: "Ещё раз",
         review_level: "Уровень {level}", review_tags: "Теги",
-        settings_tab_profile: "👤 Профиль", settings_tab_appearance: "🎨 Оформление", settings_tab_system: "⚙️ Система",
+        settings_tab_profile: "Профиль", settings_tab_appearance: "Оформление", settings_tab_system: "Система", settings_tab_api: "API-ключи",
         settings_profile_signed_out: "Войди в профиль, чтобы менять никнейм, аватар и пароль.",
         settings_profile_edit: "Редактирование профиля",
         settings_appearance_hint: "Тема и язык интерфейса"
@@ -543,7 +545,7 @@
         review_due: "Due today: {n}", review_context: "Context", review_example: "Example",
         review_speak: "Speak", review_close: "Close", review_restart: "Again",
         review_level: "Level {level}", review_tags: "Tags",
-        settings_tab_profile: "👤 Profile", settings_tab_appearance: "🎨 Appearance", settings_tab_system: "⚙️ System",
+        settings_tab_profile: "Profile", settings_tab_appearance: "Appearance", settings_tab_system: "System", settings_tab_api: "API keys",
         settings_profile_signed_out: "Sign in to change your nickname, avatar and password.",
         settings_profile_edit: "Edit profile",
         settings_appearance_hint: "Theme and app language"
@@ -576,7 +578,7 @@
         review_due: "Til gentagelse i dag: {n}", review_context: "Kontekst", review_example: "Eksempel",
         review_speak: "Læs op", review_close: "Luk", review_restart: "Igen",
         review_level: "Niveau {level}", review_tags: "Tags",
-        settings_tab_profile: "👤 Profil", settings_tab_appearance: "🎨 Udseende", settings_tab_system: "⚙️ System",
+        settings_tab_profile: "Profil", settings_tab_appearance: "Udseende", settings_tab_system: "System", settings_tab_api: "API-nøgler",
         settings_profile_signed_out: "Log ind for at ændre kaldenavn, avatar og adgangskode.",
         settings_profile_edit: "Rediger profil",
         settings_appearance_hint: "Tema og app-sprog"
@@ -609,7 +611,7 @@
         review_due: "Bugün tekrar: {n}", review_context: "Bağlam", review_example: "Örnek",
         review_speak: "Seslendir", review_close: "Kapat", review_restart: "Tekrar",
         review_level: "Seviye {level}", review_tags: "Etiketler",
-        settings_tab_profile: "👤 Profil", settings_tab_appearance: "🎨 Görünüm", settings_tab_system: "⚙️ Sistem",
+        settings_tab_profile: "Profil", settings_tab_appearance: "Görünüm", settings_tab_system: "Sistem", settings_tab_api: "API anahtarları",
         settings_profile_signed_out: "Takma ad, avatar ve şifre değiştirmek için giriş yap.",
         settings_profile_edit: "Profili düzenle",
         settings_appearance_hint: "Tema ve uygulama dili"
@@ -628,7 +630,7 @@
         gemini_error_models: "Не удалось получить список моделей Gemini.", gemini_error_generic: "Ошибка Gemini. Попробуй ещё раз.",
         gemini_error_parse: "Ответ Gemini не удалось разобрать.", gemini_error_empty: "Gemini вернул пустой ответ.",
         gemini_error_validation: "JSON не прошёл валидацию.",
-        ai_explain: "✨ ИИ-Разбор", ai_analysis_title: "ИИ-Разбор", ai_analysis_loading: "Разбираю фразу…",
+        ai_explain: "ИИ-Разбор", ai_analysis_title: "ИИ-Разбор", ai_analysis_loading: "Разбираю фразу…",
         ai_analysis_empty: "Нет выделенного текста.", ai_analysis_need_key: "Добавь Gemini API-ключ в настройках, чтобы использовать ИИ-Разбор.",
         ai_analysis_close: "Закрыть", ai_analysis_context: "Контекст",
         ai_studio_title: "AI Studio", ai_studio_open: "Открыть AI Studio", ai_studio_kicker: "AI STUDIO / ГЕНЕРАТОР", ai_explain_kicker: "AI / РАЗБОР", ai_studio_hint_badge: "AI / JSON",
@@ -659,7 +661,7 @@
         gemini_error_models: "Could not load the Gemini model list.", gemini_error_generic: "Gemini error. Please try again.",
         gemini_error_parse: "Could not parse the Gemini response.", gemini_error_empty: "Gemini returned an empty response.",
         gemini_error_validation: "JSON did not pass validation.",
-        ai_explain: "✨ AI explain", ai_analysis_title: "AI explain", ai_analysis_loading: "Analysing the phrase…",
+        ai_explain: "AI explain", ai_analysis_title: "AI explain", ai_analysis_loading: "Analysing the phrase…",
         ai_analysis_empty: "No text selected.", ai_analysis_need_key: "Add a Gemini API key in settings to use AI explain.",
         ai_analysis_close: "Close", ai_analysis_context: "Context",
         ai_studio_title: "AI Studio", ai_studio_open: "Open AI Studio", ai_studio_kicker: "AI STUDIO / GENERATOR", ai_explain_kicker: "AI / EXPLAIN", ai_studio_hint_badge: "AI / JSON",
@@ -690,7 +692,7 @@
         gemini_error_models: "Kunne ikke hente Gemini-modellisten.", gemini_error_generic: "Gemini-fejl. Prøv igen.",
         gemini_error_parse: "Gemini-svaret kunne ikke læses.", gemini_error_empty: "Gemini returnerede et tomt svar.",
         gemini_error_validation: "JSON bestod ikke valideringen.",
-        ai_explain: "✨ AI-forklaring", ai_analysis_title: "AI-forklaring", ai_analysis_loading: "Analyserer sætningen…",
+        ai_explain: "AI-forklaring", ai_analysis_title: "AI-forklaring", ai_analysis_loading: "Analyserer sætningen…",
         ai_analysis_empty: "Ingen tekst valgt.", ai_analysis_need_key: "Tilføj en Gemini API-nøgle i indstillingerne for at bruge AI-forklaring.",
         ai_analysis_close: "Luk", ai_analysis_context: "Kontekst",
         ai_studio_title: "AI Studio", ai_studio_open: "Åbn AI Studio", ai_studio_kicker: "AI STUDIO / GENERATOR", ai_explain_kicker: "AI / FORKLARING", ai_studio_hint_badge: "AI / JSON",
@@ -1698,6 +1700,196 @@
       tr: { loading: "Yükleniyor…", retry: "Tekrar dene", import_failed: "İçe aktarma başarısız: {message}", import_empty: "İçe aktarmadan önce JSON yapıştır.", import_success: "İçe aktarma tamamlandı", import_updated: "güncellendi {n}", sync_error: "Eşitleme hatası", sync_retry_failed: "Eşitleme yeniden denenemedi." }
     };
     Object.entries(E9_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E11_UI_TRANSLATIONS = {
+      ru: {
+        sidebar_slogan: "Языки без лишнего шума", sidebar_note: "Данные хранятся на этом устройстве. Синхронизация — по желанию.",
+        nav_home: "Главная", nav_lessons: "Уроки", nav_practice: "Практика и повторение", nav_my_vocabulary: "Мой словарь",
+        nav_progress: "Мой прогресс", nav_ai_studio: "ИИ-студия", nav_group_learn: "Учиться", nav_group_tools: "Инструменты", nav_group_progress: "Прогресс", nav_practice_short: "Практика", nav_vocab_short: "Словарь",
+        search_placeholder: "Поиск по урокам и словам", search_no_results: "Ничего не найдено", search_lessons: "Уроки", search_words: "Слова",
+        home_morning: "Доброе утро", home_day: "Добрый день", home_evening: "Добрый вечер", home_greeting_name: "{greeting}, {name}!",
+        home_continue: "Продолжить обучение", home_start: "Начать первый урок", home_continue_hint: "Ты остановился здесь", home_block: "Блок {n}",
+        home_start_body: "Начни с короткого урока — без спешки и лишних настроек.", home_create: "Создать первый урок",
+        home_options: "Можно продолжить так", home_option_lesson: "Следующий урок", home_option_stories: "Истории", home_option_vocab: "Словарь",
+        home_review: "Пора повторить", home_review_body: "Слова, которые уже ждут повторения: {n}. Это займёт несколько минут.",
+        home_review_cta: "Начать повторение", home_review_progress: "{done} из {total} слов вне очереди", home_tiles: "Твой прогресс",
+        tile_due: "к повторению", tile_new: "новые слова", tile_learned: "выучено", tile_weak: "слабые места",
+        home_hint_title: "Что ещё можно делать", home_hint_1: "Слушать истории и читать с переводом слов.", home_hint_2: "Повторять слова по карточкам.", home_hint_3: "Смотреть прогресс без лишних цифр.",
+        home_hint_dismiss: "Скрыть подсказку", home_empty_title: "Здесь пока пусто", home_empty_body: "Начни с первого урока или добавь свой материал.",
+        practice_title: "Практика и повторение", practice_subtitle: "Короткие действия, которые помогают не забывать.",
+        practice_review: "Повторение слов", practice_tests: "Тесты", practice_weak: "Слабые места", practice_writing: "Письмо",
+        practice_review_empty: "Пока нечего повторять. Добавь слова из уроков или словаря.", practice_weak_empty: "Слабых мест пока нет — это хорошо.",
+        practice_go_vocab: "Открыть словарь", practice_go_tests: "К тестам", progress_title: "Мой прогресс",
+        progress_subtitle: "Только то, что действительно произошло.", progress_lessons: "Уроки", progress_words: "Слова",
+        progress_stories: "Истории", progress_quizzes: "Тесты", progress_empty: "Прогресс появится после первого урока.",
+        progress_start: "Начать урок", home_goal_lesson: "Продолжить урок", home_goal_review: "Повторить слова", home_goal_stories: "Прочитать историю",
+        weak_errors: "Ошибок: {n}", loading_section: "Загружаю…", retry_section: "Повторить"
+      },
+      en: {
+        sidebar_slogan: "Languages without the noise", sidebar_note: "Data stays on this device. Sync is optional.",
+        nav_home: "Home", nav_lessons: "Lessons", nav_practice: "Practice & review", nav_my_vocabulary: "My vocabulary",
+        nav_progress: "My progress", nav_ai_studio: "AI Studio", nav_group_learn: "Learn", nav_group_tools: "Tools", nav_group_progress: "Progress", nav_practice_short: "Practice", nav_vocab_short: "Vocabulary",
+        search_placeholder: "Search lessons and words", search_no_results: "Nothing found", search_lessons: "Lessons", search_words: "Words",
+        home_morning: "Good morning", home_day: "Good afternoon", home_evening: "Good evening", home_greeting_name: "{greeting}, {name}!",
+        home_continue: "Continue learning", home_start: "Start your first lesson", home_continue_hint: "You stopped here", home_block: "Block {n}",
+        home_start_body: "Start with a short lesson — no rush, no setup.", home_create: "Create first lesson",
+        home_options: "Pick up where you left off", home_option_lesson: "Next lesson", home_option_stories: "Stories", home_option_vocab: "Vocabulary",
+        home_review: "Time to review", home_review_body: "Words waiting for review: {n}. It only takes a few minutes.",
+        home_review_cta: "Start review", home_review_progress: "{done} of {total} words out of the queue", home_tiles: "Your progress",
+        tile_due: "to review", tile_new: "new words", tile_learned: "learned", tile_weak: "weak spots",
+        home_hint_title: "What else you can do", home_hint_1: "Listen to stories and read with word translations.", home_hint_2: "Review words with flashcards.", home_hint_3: "See progress without noisy numbers.",
+        home_hint_dismiss: "Hide hint", home_empty_title: "Nothing here yet", home_empty_body: "Start with your first lesson or add your own material.",
+        practice_title: "Practice & review", practice_subtitle: "Short actions that help you remember.",
+        practice_review: "Word review", practice_tests: "Tests", practice_weak: "Weak spots", practice_writing: "Writing",
+        practice_review_empty: "Nothing to review yet. Add words from lessons or vocabulary.", practice_weak_empty: "No weak spots yet — good.",
+        practice_go_vocab: "Open vocabulary", practice_go_tests: "Go to tests", progress_title: "My progress",
+        progress_subtitle: "Only what actually happened.", progress_lessons: "Lessons", progress_words: "Words",
+        progress_stories: "Stories", progress_quizzes: "Tests", progress_empty: "Progress will appear after your first lesson.",
+        progress_start: "Start a lesson", home_goal_lesson: "Continue a lesson", home_goal_review: "Review words", home_goal_stories: "Read a story",
+        weak_errors: "Mistakes: {n}", loading_section: "Loading…", retry_section: "Retry"
+      },
+      da: {
+        sidebar_slogan: "Sprog uden støj", sidebar_note: "Data bliver på denne enhed. Synkronisering er valgfri.",
+        nav_home: "Hjem", nav_lessons: "Lektioner", nav_practice: "Øvelse og gentagelse", nav_my_vocabulary: "Mit ordforråd",
+        nav_progress: "Min fremgang", nav_ai_studio: "AI-studie", nav_group_learn: "Lær", nav_group_tools: "Værktøjer", nav_group_progress: "Fremgang", nav_practice_short: "Øvelse", nav_vocab_short: "Ordforråd",
+        search_placeholder: "Søg i lektioner og ord", search_no_results: "Intet fundet", search_lessons: "Lektioner", search_words: "Ord",
+        home_morning: "Godmorgen", home_day: "God eftermiddag", home_evening: "God aften", home_greeting_name: "{greeting}, {name}!",
+        home_continue: "Fortsæt læring", home_start: "Start din første lektion", home_continue_hint: "Du stoppede her", home_block: "Blok {n}",
+        home_start_body: "Begynd med en kort lektion — ingen hast, ingen opsætning.", home_create: "Opret første lektion",
+        home_options: "Fortsæt hvor du slap", home_option_lesson: "Næste lektion", home_option_stories: "Historier", home_option_vocab: "Ordforråd",
+        home_review: "Tid til gentagelse", home_review_body: "Ord der venter: {n}. Det tager få minutter.",
+        home_review_cta: "Start gentagelse", home_review_progress: "{done} af {total} ord ude af køen", home_tiles: "Din fremgang",
+        tile_due: "til gentagelse", tile_new: "nye ord", tile_learned: "lært", tile_weak: "svage steder",
+        home_hint_title: "Hvad du ellers kan", home_hint_1: "Lyt til historier og læs med ordoversættelser.", home_hint_2: "Gentag ord med kort.", home_hint_3: "Se fremgang uden støjende tal.",
+        home_hint_dismiss: "Skjul tip", home_empty_title: "Her er tomt endnu", home_empty_body: "Start med din første lektion eller tilføj dit eget materiale.",
+        practice_title: "Øvelse og gentagelse", practice_subtitle: "Korte handlinger, der hjælper dig med at huske.",
+        practice_review: "Ordgentagelse", practice_tests: "Tests", practice_weak: "Svage steder", practice_writing: "Skrivning",
+        practice_review_empty: "Intet at gentage endnu. Tilføj ord fra lektioner eller ordforråd.", practice_weak_empty: "Ingen svage steder endnu — godt.",
+        practice_go_vocab: "Åbn ordforråd", practice_go_tests: "Gå til tests", progress_title: "Min fremgang",
+        progress_subtitle: "Kun det, der faktisk skete.", progress_lessons: "Lektioner", progress_words: "Ord",
+        progress_stories: "Historier", progress_quizzes: "Tests", progress_empty: "Fremgang vises efter din første lektion.",
+        progress_start: "Start en lektion", home_goal_lesson: "Fortsæt en lektion", home_goal_review: "Gentag ord", home_goal_stories: "Læs en historie",
+        weak_errors: "Fejl: {n}", loading_section: "Indlæser…", retry_section: "Prøv igen"
+      },
+      tr: {
+        sidebar_slogan: "Gürültüsüz diller", sidebar_note: "Veriler bu cihazda kalır. Eşitleme isteğe bağlıdır.",
+        nav_home: "Ana sayfa", nav_lessons: "Dersler", nav_practice: "Alıştırma ve tekrar", nav_my_vocabulary: "Sözlüğüm",
+        nav_progress: "İlerlemem", nav_ai_studio: "AI stüdyosu", nav_group_learn: "Öğren", nav_group_tools: "Araçlar", nav_group_progress: "İlerleme", nav_practice_short: "Alıştırma", nav_vocab_short: "Sözlük",
+        search_placeholder: "Derslerde ve kelimelerde ara", search_no_results: "Sonuç yok", search_lessons: "Dersler", search_words: "Kelimeler",
+        home_morning: "Günaydın", home_day: "İyi günler", home_evening: "İyi akşamlar", home_greeting_name: "{greeting}, {name}!",
+        home_continue: "Öğrenmeye devam et", home_start: "İlk dersine başla", home_continue_hint: "Burada kaldın", home_block: "Bölüm {n}",
+        home_start_body: "Kısa bir dersle başla — acele yok, ayar yok.", home_create: "İlk dersi oluştur",
+        home_options: "Kaldığın yerden devam et", home_option_lesson: "Sonraki ders", home_option_stories: "Hikâyeler", home_option_vocab: "Sözlük",
+        home_review: "Tekrar zamanı", home_review_body: "Tekrar bekleyen kelimeler: {n}. Birkaç dakika sürer.",
+        home_review_cta: "Tekrara başla", home_review_progress: "{total} kelimeden {done} tanesi kuyruk dışında", home_tiles: "İlerlemen",
+        tile_due: "tekrarda", tile_new: "yeni kelime", tile_learned: "öğrenildi", tile_weak: "zayıf noktalar",
+        home_hint_title: "Başka neler yapabilirsin", home_hint_1: "Hikâyeleri dinle ve kelime çevirileriyle oku.", home_hint_2: "Kelimeleri kartlarla tekrar et.", home_hint_3: "Gürültüsüz sayılarla ilerlemeni gör.",
+        home_hint_dismiss: "İpucunu gizle", home_empty_title: "Burası henüz boş", home_empty_body: "İlk dersinle başla veya kendi materyalini ekle.",
+        practice_title: "Alıştırma ve tekrar", practice_subtitle: "Hatırlamana yardımcı kısa adımlar.",
+        practice_review: "Kelime tekrarı", practice_tests: "Testler", practice_weak: "Zayıf noktalar", practice_writing: "Yazma",
+        practice_review_empty: "Henüz tekrar edilecek bir şey yok. Derslerden veya sözlükten kelime ekle.", practice_weak_empty: "Henüz zayıf nokta yok — iyi.",
+        practice_go_vocab: "Sözlüğü aç", practice_go_tests: "Testlere git", progress_title: "İlerlemem",
+        progress_subtitle: "Yalnızca gerçekten olanlar.", progress_lessons: "Dersler", progress_words: "Kelimeler",
+        progress_stories: "Hikâyeler", progress_quizzes: "Testler", progress_empty: "İlerleme ilk dersten sonra görünür.",
+        progress_start: "Derse başla", home_goal_lesson: "Bir derse devam et", home_goal_review: "Kelimeleri tekrar et", home_goal_stories: "Bir hikâye oku",
+        weak_errors: "Hatalar: {n}", loading_section: "Yükleniyor…", retry_section: "Tekrar dene"
+      }
+    };
+    Object.entries(E11_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E12_UI_TRANSLATIONS = {
+      ru: {
+        mode_title: "Режим приложения", mode_simple: "Обычный", mode_simple_hint: "Только то, что нужно для учёбы",
+        mode_advanced: "Продвинутый", mode_advanced_hint: "Импорт, редактор и ИИ-инструменты",
+        onboarding_welcome: "Добро пожаловать", onboarding_welcome_body: "Научимся пользоваться LINGUA/OS за минуту.",
+        onboarding_language: "Какой язык изучаешь?", onboarding_level: "Примерный уровень", onboarding_unknown: "Не знаю",
+        onboarding_guide_title: "Как всё устроено", onboarding_guide_1: "Выбери урок на главной.", onboarding_guide_2: "Читай, слушай и отмечай слова.", onboarding_guide_3: "Повторяй слова в удобное время.",
+        onboarding_next: "Дальше", onboarding_back: "Назад", onboarding_skip: "Пропустить", onboarding_start: "Начать",
+        onboarding_demo: "Открыть демо-урок", onboarding_login: "Войти, чтобы сохранить прогресс", onboarding_finish: "Готово",
+        onboarding_saved: "Можно изменить в настройках.",
+        simple_create_title: "Что хочешь изучить?", simple_create_lead: "Напиши тему простыми словами — остальное соберём сами.",
+        simple_topic: "Тема", simple_topic_placeholder: "Например: заказать кофе, разговор о работе", simple_goal: "Цель", simple_level: "Уровень",
+        simple_goal_travel: "Для поездок", simple_goal_work: "Для работы", simple_goal_talk: "Для общения", simple_goal_grammar: "Разобраться в грамматике",
+        simple_generate: "Создать урок", simple_generating: "Собираю урок…", simple_ai_unavailable: "ИИ сейчас недоступен. Вот готовые уроки — можно начать с них.",
+        simple_ready: "Готовые уроки", simple_created: "Урок создан", simple_create_failed: "Не получилось создать урок. Попробуй ещё раз или выбери готовый.",
+        simple_no_lessons: "Пока нет готовых уроков. Создай первый.",
+        path_title: "Учебный путь", path_intro: "Знакомство", path_explain: "Объяснение", path_examples: "Примеры",
+        path_practice: "Упражнение", path_sentence: "Своё предложение", path_check: "Проверка", path_review: "Повторить позже",
+        path_available: "Доступно", path_missing: "Появится в этом уроке", path_review_hint: "Слова сохраняются в словарь и повторение."
+      },
+      en: {
+        mode_title: "App mode", mode_simple: "Simple", mode_simple_hint: "Only what you need to learn",
+        mode_advanced: "Advanced", mode_advanced_hint: "Import, editor and AI tools",
+        onboarding_welcome: "Welcome", onboarding_welcome_body: "A one-minute tour of LINGUA/OS.",
+        onboarding_language: "Which language are you learning?", onboarding_level: "Rough level", onboarding_unknown: "Not sure",
+        onboarding_guide_title: "How it works", onboarding_guide_1: "Pick a lesson on Home.", onboarding_guide_2: "Read, listen and save words.", onboarding_guide_3: "Review words whenever it suits you.",
+        onboarding_next: "Next", onboarding_back: "Back", onboarding_skip: "Skip", onboarding_start: "Start",
+        onboarding_demo: "Open demo lesson", onboarding_login: "Sign in to save progress", onboarding_finish: "Done",
+        onboarding_saved: "You can change this in Settings.",
+        simple_create_title: "What do you want to learn?", simple_create_lead: "Describe the topic in plain words — we’ll build the lesson.",
+        simple_topic: "Topic", simple_topic_placeholder: "For example: ordering coffee, talking about work", simple_goal: "Goal", simple_level: "Level",
+        simple_goal_travel: "For travel", simple_goal_work: "For work", simple_goal_talk: "For conversation", simple_goal_grammar: "Understand grammar",
+        simple_generate: "Create lesson", simple_generating: "Building your lesson…", simple_ai_unavailable: "AI is unavailable right now. Here are ready lessons to start with.",
+        simple_ready: "Ready lessons", simple_created: "Lesson created", simple_create_failed: "Could not create the lesson. Try again or pick a ready lesson.",
+        simple_no_lessons: "No ready lessons yet. Create your first one.",
+        path_title: "Learning path", path_intro: "Introduction", path_explain: "Explanation", path_examples: "Examples",
+        path_practice: "Practice", path_sentence: "Your sentence", path_check: "Check", path_review: "Review later",
+        path_available: "Available", path_missing: "Appears in this lesson", path_review_hint: "Words are saved to vocabulary and review."
+      },
+      da: {
+        mode_title: "Apptilstand", mode_simple: "Enkel", mode_simple_hint: "Kun det, du har brug for",
+        mode_advanced: "Avanceret", mode_advanced_hint: "Import, editor og AI-værktøjer",
+        onboarding_welcome: "Velkommen", onboarding_welcome_body: "En kort rundvisning i LINGUA/OS.",
+        onboarding_language: "Hvilket sprog lærer du?", onboarding_level: "Omtrentligt niveau", onboarding_unknown: "Ved det ikke",
+        onboarding_guide_title: "Sådan virker det", onboarding_guide_1: "Vælg en lektion på Hjem.", onboarding_guide_2: "Læs, lyt og gem ord.", onboarding_guide_3: "Gentag ord, når det passer dig.",
+        onboarding_next: "Næste", onboarding_back: "Tilbage", onboarding_skip: "Spring over", onboarding_start: "Start",
+        onboarding_demo: "Åbn demolektion", onboarding_login: "Log ind for at gemme fremskridt", onboarding_finish: "Færdig",
+        onboarding_saved: "Du kan ændre det i Indstillinger.",
+        simple_create_title: "Hvad vil du lære?", simple_create_lead: "Beskriv emnet med enkle ord — vi bygger lektionen.",
+        simple_topic: "Emne", simple_topic_placeholder: "F.eks.: bestille kaffe, tale om arbejde", simple_goal: "Mål", simple_level: "Niveau",
+        simple_goal_travel: "Til rejser", simple_goal_work: "Til arbejde", simple_goal_talk: "Til samtale", simple_goal_grammar: "Forstå grammatik",
+        simple_generate: "Opret lektion", simple_generating: "Bygger lektionen…", simple_ai_unavailable: "AI er utilgængelig nu. Her er klar lektioner.",
+        simple_ready: "Klar lektioner", simple_created: "Lektion oprettet", simple_create_failed: "Lektionen kunne ikke oprettes. Prøv igen eller vælg en klar lektion.",
+        simple_no_lessons: "Ingen klar lektioner endnu. Opret den første.",
+        path_title: "Læringssti", path_intro: "Introduktion", path_explain: "Forklaring", path_examples: "Eksempler",
+        path_practice: "Øvelse", path_sentence: "Din sætning", path_check: "Tjek", path_review: "Gentag senere",
+        path_available: "Tilgængelig", path_missing: "Vises i denne lektion", path_review_hint: "Ord gemmes i ordforråd og gentagelse."
+      },
+      tr: {
+        mode_title: "Uygulama modu", mode_simple: "Basit", mode_simple_hint: "Yalnızca öğrenmek için gerekenler",
+        mode_advanced: "Gelişmiş", mode_advanced_hint: "İçe aktarma, düzenleyici ve AI araçları",
+        onboarding_welcome: "Hoş geldin", onboarding_welcome_body: "LINGUA/OS turu bir dakika sürer.",
+        onboarding_language: "Hangi dili öğreniyorsun?", onboarding_level: "Yaklaşık seviye", onboarding_unknown: "Bilmiyorum",
+        onboarding_guide_title: "Nasıl çalışır", onboarding_guide_1: "Ana sayfada bir ders seç.", onboarding_guide_2: "Oku, dinle ve kelimeleri kaydet.", onboarding_guide_3: "Kelimeleri uygun olduğunda tekrar et.",
+        onboarding_next: "İleri", onboarding_back: "Geri", onboarding_skip: "Atla", onboarding_start: "Başla",
+        onboarding_demo: "Demo dersi aç", onboarding_login: "İlerlemeyi kaydetmek için giriş yap", onboarding_finish: "Bitti",
+        onboarding_saved: "Ayarlardan değiştirebilirsin.",
+        simple_create_title: "Neyi öğrenmek istiyorsun?", simple_create_lead: "Konuyu basit kelimelerle yaz — dersi biz oluşturalım.",
+        simple_topic: "Konu", simple_topic_placeholder: "Örneğin: kahve siparişi, iş hakkında konuşma", simple_goal: "Amaç", simple_level: "Seviye",
+        simple_goal_travel: "Seyahat için", simple_goal_work: "İş için", simple_goal_talk: "Sohbet için", simple_goal_grammar: "Dil bilgisini anla",
+        simple_generate: "Ders oluştur", simple_generating: "Ders hazırlanıyor…", simple_ai_unavailable: "AI şu anda kullanılamıyor. Hazır dersler:",
+        simple_ready: "Hazır dersler", simple_created: "Ders oluşturuldu", simple_create_failed: "Ders oluşturulamadı. Tekrar dene veya hazır bir ders seç.",
+        simple_no_lessons: "Henüz hazır ders yok. İlkini oluştur.",
+        path_title: "Öğrenme yolu", path_intro: "Tanışma", path_explain: "Açıklama", path_examples: "Örnekler",
+        path_practice: "Alıştırma", path_sentence: "Kendi cümlen", path_check: "Kontrol", path_review: "Sonra tekrar et",
+        path_available: "Mevcut", path_missing: "Bu derste görünecek", path_review_hint: "Kelimeler sözlüğe ve tekrara kaydedilir."
+      }
+    };
+    Object.entries(E12_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
+      Object.assign(UI_TRANSLATIONS[language], dictionary);
+    });
+
+    const E13_UI_TRANSLATIONS = {
+      ru: { theme_light: "Светлая", theme_dark: "Тёмная", accent: "Акцент", accent_blue: "Синий", accent_emerald: "Изумрудный", sidebar_collapse: "Свернуть меню", sidebar_expand: "Развернуть меню" },
+      en: { theme_light: "Light", theme_dark: "Dark", accent: "Accent", accent_blue: "Blue", accent_emerald: "Emerald", sidebar_collapse: "Collapse menu", sidebar_expand: "Expand menu" },
+      da: { theme_light: "Lys", theme_dark: "Mørk", accent: "Accent", accent_blue: "Blå", accent_emerald: "Smaragd", sidebar_collapse: "Skjul menu", sidebar_expand: "Vis menu" },
+      tr: { theme_light: "Açık", theme_dark: "Koyu", accent: "Vurgu", accent_blue: "Mavi", accent_emerald: "Zümrüt", sidebar_collapse: "Menüyü daralt", sidebar_expand: "Menüyü genişlet" }
+    };
+    Object.entries(E13_UI_TRANSLATIONS).forEach(([language, dictionary]) => {
       Object.assign(UI_TRANSLATIONS[language], dictionary);
     });
 

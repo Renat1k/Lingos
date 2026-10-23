@@ -1,6 +1,10 @@
 // LINGUA/OS · navigation, language/course UI, routing, events, boot
 "use strict";
 
+    let onboardingStep = 1;
+    let onboardingLanguage = "en";
+    let onboardingLevel = "";
+
     function syncLanguageUI() {
       const active = activeLanguageCodes();
       const language = active.includes(state.language) ? state.language : (active[0] || null);
@@ -24,6 +28,96 @@
       if (topbarLevel) topbarLevel.setAttribute("aria-label", language ? `${t("language")}: ${languageLabel(language)}` : t("no_active_courses"));
       if (topbarLevel) topbarLevel.setAttribute("aria-expanded", languageModal?.open ? "true" : "false");
       if (profileLanguage) profileLanguage.textContent = language ? languageLabel(language) : t("no_active_courses");
+    }
+
+    const SIDEBAR_COLLAPSED_KEY = "lingos_sidebar_collapsed";
+
+    function readSidebarCollapsed() {
+      try {
+        return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function setSidebarCollapsed(collapsed, options = {}) {
+      const isCollapsed = Boolean(collapsed);
+      const persist = options.persist !== false;
+      document.body.classList.toggle("sidebar-collapsed", isCollapsed);
+      if (persist) {
+        try {
+          window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+        } catch (error) { /* localStorage may be unavailable */ }
+      }
+      const toggle = document.getElementById("sidebarToggle");
+      if (toggle) {
+        toggle.setAttribute("aria-expanded", String(!isCollapsed));
+        toggle.setAttribute("aria-label", t(isCollapsed ? "sidebar_expand" : "sidebar_collapse"));
+      }
+    }
+
+    function setActiveAppSection(section) {
+      document.body.classList.toggle("focus-mode", state.view === "lesson");
+      document.querySelectorAll("[data-app-section]").forEach((button) => {
+        const active = button.dataset.appSection === section;
+        button.classList.toggle("is-active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+    }
+
+    setSidebarCollapsed(readSidebarCollapsed(), { persist: false });
+
+    document.getElementById("sidebarToggle")?.addEventListener("click", () => {
+      setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+    });
+
+    function goAppSection(section) {
+      const targets = {
+        home: "#home",
+        lessons: "#dashboard",
+        practice: "#practice",
+        vocabulary: "#vocabulary",
+        progress: "#progress"
+      };
+      const target = targets[section] || "#home";
+      if (window.location.hash === target) {
+        if (section === "home") renderHome();
+        else if (section === "lessons") renderDashboard();
+        else if (section === "practice") renderPracticeHub();
+        else if (section === "vocabulary") renderVocabularyHub();
+        else renderProgressHub();
+      } else {
+        window.location.hash = target;
+      }
+    }
+
+    function renderGlobalSearch(query) {
+      const input = document.getElementById("globalSearch");
+      const results = document.getElementById("globalSearchResults");
+      if (!input || !results) return;
+      const term = String(query || "").trim().toLocaleLowerCase();
+      if (!term) {
+        results.hidden = true;
+        results.innerHTML = "";
+        return;
+      }
+      const lessons = (typeof getVisibleLessons === "function" ? getVisibleLessons() : [])
+        .filter((lesson) => `${lesson.title} ${lesson.subtitle || ""}`.toLocaleLowerCase().includes(term))
+        .slice(0, 5);
+      const stories = (typeof getVisibleStories === "function" ? getVisibleStories() : [])
+        .filter((story) => `${story.title} ${story.subtitle || ""}`.toLocaleLowerCase().includes(term))
+        .slice(0, 4);
+      const words = state.vocab
+        .filter((word) => `${word.word} ${word.translation}`.toLocaleLowerCase().includes(term))
+        .slice(0, 5);
+      const items = [
+        ...lessons.map((lesson) => `<button type="button" class="search-result" data-search-kind="lesson" data-search-id="${Number(lesson.id)}"><span aria-hidden="true">📚</span><span><strong>${escapeHtml(lesson.title || "")}</strong><small>${escapeHtml(t("search_lessons"))}</small></span></button>`),
+        ...stories.map((story) => `<button type="button" class="search-result" data-search-kind="story" data-search-id="${Number(story.id)}"><span aria-hidden="true">📖</span><span><strong>${escapeHtml(story.title || "")}</strong><small>${escapeHtml(t("nav_stories"))}</small></span></button>`),
+        ...words.map((word) => `<button type="button" class="search-result" data-search-kind="word" data-search-id="${escapeHtml(word.word)}"><span aria-hidden="true">🔤</span><span><strong>${escapeHtml(word.word || "")}</strong><small>${escapeHtml(word.translation || "")}</small></span></button>`)
+      ];
+      results.innerHTML = items.length ? items.join("") : `<div class="search-empty">${escapeHtml(t("search_no_results"))}</div>`;
+      results.hidden = false;
     }
 
     function updateSectionUI(section) {
@@ -522,8 +616,9 @@
           </div>
         </section>
       `;
+      if (typeof setActiveAppSection === "function") setActiveAppSection("home");
       topbarContext.textContent = t("no_active_courses").toLowerCase();
-      progressValue.textContent = "00";
+      progressValue.textContent = "";
       topProgressBar.style.width = "0%";
       backToLessons.hidden = true;
       updateSectionUI("course");
@@ -648,7 +743,10 @@
         renderNoActiveCourses();
         return;
       }
-      if (state.view === "dashboard") renderDashboard();
+      if (state.view === "home") renderHome();
+      else if (state.view === "practice") renderPracticeHub();
+      else if (state.view === "progress") renderProgressHub();
+      else if (state.view === "dashboard") renderDashboard();
       else if (state.view === "stories") renderStoriesHub();
       else if (state.view === "vocabulary") renderVocabularyHub();
       else if (state.view === "lesson" && state.lessonId) {
@@ -699,6 +797,24 @@
         return;
       }
 
+      if (hash === "#practice") {
+        if (!force && state.view === "practice") return;
+        renderPracticeHub();
+        return;
+      }
+
+      if (hash === "#progress") {
+        if (!force && state.view === "progress") return;
+        renderProgressHub();
+        return;
+      }
+
+      if (hash === "#home" || hash === "") {
+        if (!force && state.view === "home") return;
+        renderHome();
+        return;
+      }
+
       const lessonMatch = /^#lesson-(\d+)$/.exec(hash);
       if (lessonMatch) {
         const lessonId = Number(lessonMatch[1]);
@@ -710,14 +826,161 @@
         }
       }
 
-      if (!force && state.view === "dashboard") return;
-      renderDashboard();
+      if (hash === "#dashboard") {
+        if (!force && state.view === "dashboard") return;
+        renderDashboard();
+        return;
+      }
+      if (!force && state.view === "home") return;
+      renderHome();
+    }
+
+    /* ---------- onboarding / simple mode ---------- */
+    const ONBOARDING_KEY = "lingua_onboarding_done";
+
+    function onboardingCompleted() {
+      return Boolean(readJSON(ONBOARDING_KEY, false));
+    }
+
+    function finishOnboarding() {
+      writeJSON(ONBOARDING_KEY, true);
+      const modal = document.getElementById("onboardingModal");
+      if (modal?.open) modal.close();
+      state.lastFocus?.focus?.({ preventScroll: true });
+    }
+
+    function renderOnboardingLanguages() {
+      const host = document.getElementById("onboardingLanguages");
+      if (!host) return;
+      host.innerHTML = activeLanguageCodes().map((code) => `
+        <button class="choice-card${code === currentLanguage() ? " is-active" : ""}" type="button" data-onboarding-language="${escapeHtml(code)}" aria-pressed="${code === currentLanguage() ? "true" : "false"}">
+          <span aria-hidden="true">${renderFlag(code)}</span> ${escapeHtml(languageLabel(code))}
+        </button>`).join("");
+    }
+
+    function setOnboardingStep(stepIndex) {
+      onboardingStep = Math.max(1, Math.min(4, Number(stepIndex) || 1));
+      document.querySelectorAll("[data-onboarding-step]").forEach((step) => {
+        step.hidden = Number(step.dataset.onboardingStep) !== onboardingStep;
+      });
+      const next = document.querySelector('[data-onboarding-action="next"]');
+      if (next) next.textContent = onboardingStep === 4 ? t("onboarding_finish") : t("onboarding_next");
+      const back = document.querySelector('[data-onboarding-action="back"]');
+      if (back) back.hidden = onboardingStep === 1;
+      const demo = document.querySelector('[data-onboarding-action="demo"]');
+      if (demo) demo.hidden = onboardingStep !== 4;
+      const login = document.querySelector('[data-onboarding-action="login"]');
+      if (login) login.hidden = onboardingStep !== 4;
+    }
+
+    function openOnboarding() {
+      const modal = document.getElementById("onboardingModal");
+      if (!modal) return;
+      state.lastFocus = document.activeElement;
+      onboardingStep = 1;
+      onboardingLanguage = currentLanguage() || "en";
+      onboardingLevel = state.settings.level || "";
+      document.querySelectorAll("[data-onboarding-level]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.onboardingLevel === onboardingLevel));
+        button.classList.toggle("is-active", button.dataset.onboardingLevel === onboardingLevel);
+      });
+      renderOnboardingLanguages();
+      setOnboardingStep(1);
+      if (!modal.open) {
+        if (typeof modal.showModal === "function") modal.showModal();
+        else modal.setAttribute("open", "");
+      }
+    }
+
+    function maybeStartOnboarding() {
+      if (onboardingCompleted() || hasAdvancedWorkspaceData()) return;
+      window.setTimeout(openOnboarding, 280);
+    }
+
+    function simpleReadyLessonsMarkup() {
+      return getVisibleLessons().slice(0, 4).map((lesson) => `
+        <a class="simple-ready-link" href="#lesson-${Number(lesson.id)}">
+          <span aria-hidden="true">📚</span><strong>${escapeHtml(lesson.title || t("nav_lessons"))}</strong>
+        </a>`).join("");
+    }
+
+    function openSimpleLessonModal() {
+      const modal = document.getElementById("simpleLessonModal");
+      if (!modal) return;
+      state.lastFocus = document.activeElement;
+      const topic = document.getElementById("simpleLessonTopic");
+      const status = document.getElementById("simpleLessonStatus");
+      const ready = document.getElementById("simpleReadyLessons");
+      if (topic) topic.value = "";
+      if (status) { status.textContent = ""; status.className = "simple-status"; }
+      if (ready) ready.innerHTML = `<span class="home-kicker">${escapeHtml(t("simple_ready"))}</span>${simpleReadyLessonsMarkup() || `<p>${escapeHtml(t("simple_no_lessons"))}</p>`}`;
+      const level = document.getElementById("simpleLessonLevel");
+      if (level) level.value = state.settings.level || "B1";
+      if (!modal.open) {
+        if (typeof modal.showModal === "function") modal.showModal();
+        else modal.setAttribute("open", "");
+      }
+      window.setTimeout(() => topic?.focus({ preventScroll: true }), 50);
+    }
+
+    async function generateSimpleLesson() {
+      const modal = document.getElementById("simpleLessonModal");
+      const topicInput = document.getElementById("simpleLessonTopic");
+      const status = document.getElementById("simpleLessonStatus");
+      const button = document.getElementById("simpleLessonGenerate");
+      const topic = String(topicInput?.value || "").trim();
+      if (!topic) {
+        if (status) { status.textContent = t("simple_create_failed"); status.className = "simple-status is-error"; }
+        topicInput?.focus({ preventScroll: true });
+        return;
+      }
+      const level = document.getElementById("simpleLessonLevel")?.value || state.settings.level || "B1";
+      const goal = document.getElementById("simpleLessonGoal")?.value || "talk";
+      if (button) button.disabled = true;
+      if (status) { status.textContent = t("simple_generating"); status.className = "simple-status is-loading"; }
+      try {
+        const prompt = [
+          `Create one language lesson for a learner of ${languageLabel(currentLanguage())}.`,
+          `Topic: ${topic}. Goal: ${goal}. Level: ${level}.`,
+          `Write all target-language content in ${languageLabel(currentLanguage())}; explanations in ${UI_LANGUAGES[state.settings.uiLanguage]?.label || "English"}.`,
+          `Return only JSON: {"lesson":{"title":"","subtitle":"","level":"${level}","blocks":[`,
+          `{"type":"theory","title":"","content":"","rule_lines":[],"formulas":[],"mistakes":[],"key_phrases":[],"fun_fact":""},`,
+          `{"type":"reading_heavy","title":"","text":"<p></p>","glossary":[]},`,
+          `{"type":"dialogue","title":"","participants":[],"messages":[]},`,
+          `{"type":"quiz","title":"","questions":[]},`,
+          `{"type":"practice_write","title":"","brief":""}]}}`
+        ].join(" ");
+        const result = await generateAiText(prompt, {
+          system: "You create clear, friendly language lessons. Return valid JSON only.",
+          json: true,
+          temperature: 0.55,
+          maxOutputTokens: 12000
+        });
+        const raw = parseGeminiJson(result.text);
+        const source = raw?.lesson || raw;
+        if (!source || typeof source !== "object") throw new Error("empty lesson");
+        const normalized = normalizeImportedLesson({ ...source, title: source.title || topic, level }, nextLessonId());
+        if (!normalized) throw new Error("invalid lesson");
+        const imported = importPayload({ lessons: [normalized] });
+        if (!imported.lessonsAdded && !imported.lessonsUpdated) throw new Error("not imported");
+        if (modal?.open) modal.close();
+        rerenderCurrentView();
+        window.location.hash = `#lesson-${Number(normalized.id)}`;
+        showToast(t("simple_created"), "success");
+      } catch (error) {
+        console.warn("Simple lesson generation failed.", error);
+        if (status) { status.textContent = t("simple_ai_unavailable"); status.className = "simple-status is-error"; }
+        const ready = document.getElementById("simpleReadyLessons");
+        if (ready) ready.innerHTML = `<span class="home-kicker">${escapeHtml(t("simple_ready"))}</span>${simpleReadyLessonsMarkup() || `<p>${escapeHtml(t("simple_no_lessons"))}</p>`}`;
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
 
     /* ---------- boot ---------- */
     function renderError(error) {
       topbarContext.textContent = "system / error";
-      progressValue.textContent = "00";
+      progressValue.textContent = "";
       topProgressBar.style.width = "0%";
       backToLessons.hidden = true;
       app.innerHTML = `
@@ -765,6 +1028,7 @@
         loadProfile();
         applySettings();
         route(true);
+        maybeStartOnboarding();
         setSyncStatus("local");
         initCloudSyncWhenReady();
         window.setTimeout(() => {
@@ -1018,6 +1282,16 @@
       });
     });
 
+    document.querySelectorAll("[data-mode-setting]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.settings.mode = button.dataset.modeSetting === "advanced" ? "advanced" : "simple";
+        persistSettings();
+        applySettings();
+        rerenderCurrentView();
+        showToast(t(state.settings.mode === "advanced" ? "mode_advanced" : "mode_simple"), "info");
+      });
+    });
+
     document.querySelectorAll("[data-theme-setting]").forEach((button) => {
       button.addEventListener("click", () => {
         const theme = button.dataset.themeSetting;
@@ -1025,7 +1299,18 @@
         state.settings.theme = theme;
         persistSettings();
         applySettings();
-        showToast(`${t("theme")}: ${THEMES[theme].label}`, "info");
+        showToast(`${t("theme")}: ${t(theme === "light" ? "theme_light" : "theme_dark")}`, "info");
+      });
+    });
+
+    document.querySelectorAll("[data-accent-setting]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const accent = button.dataset.accentSetting;
+        if (!ACCENTS[accent]) return;
+        state.settings.accent = accent;
+        persistSettings();
+        applySettings();
+        showToast(`${t("accent")}: ${t(accent === "emerald" ? "accent_emerald" : "accent_blue")}`, "info");
       });
     });
 
@@ -1190,6 +1475,149 @@
 
     document.getElementById("syncRetry")?.addEventListener("click", () => {
       void retryCloudSync();
+    });
+
+    document.addEventListener("click", (event) => {
+      const onboardingLanguageButton = event.target.closest("[data-onboarding-language]");
+      if (onboardingLanguageButton) {
+        onboardingLanguage = onboardingLanguageButton.dataset.onboardingLanguage;
+        document.querySelectorAll("[data-onboarding-language]").forEach((button) => {
+          const active = button === onboardingLanguageButton;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        return;
+      }
+      const onboardingLevelButton = event.target.closest("[data-onboarding-level]");
+      if (onboardingLevelButton) {
+        onboardingLevel = onboardingLevelButton.dataset.onboardingLevel;
+        document.querySelectorAll("[data-onboarding-level]").forEach((button) => {
+          const active = button === onboardingLevelButton;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        return;
+      }
+      const onboardingAction = event.target.closest("[data-onboarding-action]");
+      if (onboardingAction) {
+        const action = onboardingAction.dataset.onboardingAction;
+        if (action === "next") {
+          if (onboardingStep === 4) {
+            state.settings.level = onboardingLevel === "unknown" || !onboardingLevel ? "" : onboardingLevel;
+            state.settings.mode = state.settings.mode === "advanced" ? "advanced" : "simple";
+            if (activeLanguageCodes().includes(onboardingLanguage)) setLearningLanguage(onboardingLanguage, false);
+            persistSettings();
+            finishOnboarding();
+            rerenderCurrentView();
+            showToast(t("onboarding_finish"), "success");
+          } else {
+            setOnboardingStep(onboardingStep + 1);
+          }
+        } else if (action === "back") {
+          setOnboardingStep(onboardingStep - 1);
+        } else if (action === "skip") {
+          finishOnboarding();
+        } else if (action === "login") {
+          finishOnboarding();
+          openProfileModal();
+        } else if (action === "demo") {
+          finishOnboarding();
+        }
+        return;
+      }
+      if (event.target.closest("#simpleLessonClose")) {
+        document.getElementById("simpleLessonModal")?.close();
+        state.lastFocus?.focus?.({ preventScroll: true });
+        return;
+      }
+      if (event.target.closest("#simpleLessonGenerate")) {
+        event.preventDefault();
+        void generateSimpleLesson();
+        return;
+      }
+    });
+
+    document.getElementById("onboardingModal")?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      finishOnboarding();
+    });
+    document.getElementById("simpleLessonModal")?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      event.currentTarget.close();
+      state.lastFocus?.focus?.({ preventScroll: true });
+    });
+    document.getElementById("simpleLessonModal")?.addEventListener("click", (event) => {
+      if (event.target.id === "simpleLessonModal") event.currentTarget.close();
+    });
+
+    document.addEventListener("click", (event) => {
+      const appSection = event.target.closest("[data-app-section]");
+      if (appSection) {
+        event.preventDefault();
+        goAppSection(appSection.dataset.appSection || "home");
+        document.getElementById("globalSearchResults")?.setAttribute("hidden", "");
+        return;
+      }
+      if (event.target.closest("[data-scroll-tests]")) {
+        event.preventDefault();
+        document.querySelector(".practice-tests")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (event.target.closest("[data-sidebar-settings]")) {
+        event.preventDefault();
+        openSettings();
+        return;
+      }
+      if (event.target.closest("[data-open-ai-studio]")) {
+        event.preventDefault();
+        if (typeof openAiStudio === "function") openAiStudio();
+        return;
+      }
+      const resume = event.target.closest("[data-resume-block]");
+      if (resume) {
+        window.sessionStorage.setItem("lingua_resume_block", resume.dataset.resumeBlock || "0");
+        return;
+      }
+      const searchResult = event.target.closest("[data-search-kind]");
+      if (searchResult) {
+        event.preventDefault();
+        const kind = searchResult.dataset.searchKind;
+        const id = searchResult.dataset.searchId;
+        document.getElementById("globalSearchResults")?.setAttribute("hidden", "");
+        if (kind === "lesson") window.location.hash = `#lesson-${Number(id)}`;
+        else if (kind === "story") window.location.hash = `#story-${Number(id)}`;
+        else {
+          state.vocabSearch = String(id || "");
+          if (window.location.hash === "#vocabulary") renderVocabularyHub();
+          else window.location.hash = "#vocabulary";
+        }
+        return;
+      }
+      const dismissHint = event.target.closest("[data-dismiss-home-hint]");
+      if (dismissHint) {
+        event.preventDefault();
+        writeJSON("lingua_home_hint_dismissed", true);
+        dismissHint.closest(".home-hint")?.remove();
+        return;
+      }
+      const tile = event.target.closest("[data-home-tile]");
+      if (tile) {
+        event.preventDefault();
+        if (tile.dataset.homeTile === "review") openReviewModal();
+        else if (tile.dataset.homeTile === "weak") goAppSection("progress");
+        else goAppSection("vocabulary");
+        return;
+      }
+    });
+
+    document.addEventListener("input", (event) => {
+      if (event.target.id === "globalSearch") renderGlobalSearch(event.target.value);
+    });
+
+    document.addEventListener("focusout", (event) => {
+      if (!event.target.closest(".sidebar-search")) {
+        window.setTimeout(() => document.getElementById("globalSearchResults")?.setAttribute("hidden", ""), 120);
+      }
     });
 
     window.addEventListener("hashchange", () => route(false));

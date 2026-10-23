@@ -91,7 +91,17 @@
     }
 
     function speechLocale() {
-      const code = state.language;
+      let code = String(state.language || "").trim();
+      if (!SPEECH_LANGUAGE_BCP47[code]) {
+        const lower = code.toLocaleLowerCase();
+        const match = Object.entries(LANGUAGE_META || {}).find(([, meta]) =>
+          String(meta.label || "").toLocaleLowerCase() === lower || String(meta.native || "").toLocaleLowerCase() === lower);
+        if (match) code = match[0];
+      }
+      if (typeof vocabularySpeechLanguageInfo === "function") {
+        const info = vocabularySpeechLanguageInfo(code);
+        return info.regionTag || info.baseTag || "en-US";
+      }
       const pack = state.languagePacks?.[code];
       const flagLanguage = pack?.flagCode ? SPEECH_COUNTRY_LANGUAGES[pack.flagCode] : "";
       const base = flagLanguage || code;
@@ -111,22 +121,22 @@
     }
 
     function speechRateLabel(rate) {
-      return `${rate}×`;
+      return `${rate}x`;
     }
 
     function renderSpeechControls() {
       if (!speechSupported()) return "";
       const rate = getSpeechRate();
       return `
-        <div class="speech-controls" data-speech-controls>
+        <div class="speech-controls audio-toolbar" data-speech-controls>
           <button class="speech-btn" type="button" data-speech-action="play" aria-label="${escapeHtml(t("speech_listen"))}" aria-pressed="false">
-            ${icon("volume")}<span>${escapeHtml(t("speech_listen"))}</span>
+            ${icon("play")}<span>${escapeHtml(t("speech_listen"))}</span>
           </button>
           <button class="speech-btn" type="button" data-speech-action="pause" aria-label="${escapeHtml(t("speech_pause"))}" aria-pressed="false" disabled>
-            ⏸<span>${escapeHtml(t("speech_pause"))}</span>
+            ${icon("pause")}<span>${escapeHtml(t("speech_pause"))}</span>
           </button>
           <button class="speech-btn" type="button" data-speech-action="stop" aria-label="${escapeHtml(t("speech_stop"))}" disabled>
-            ⏹<span>${escapeHtml(t("speech_stop"))}</span>
+            ${icon("stop")}<span>${escapeHtml(t("speech_stop"))}</span>
           </button>
           <label class="speech-rate">
             <span>${escapeHtml(t("speech_speed"))}</span>
@@ -138,21 +148,86 @@
       `;
     }
 
-    let speechState = { active: false, paused: false, queue: [], index: 0, utterance: null, target: null, token: 0 };
+    let speechState = { active: false, paused: false, queue: [], index: 0, utterance: null, target: null, token: 0, words: [], activeWord: null, currentWordIndex: -1 };
 
-    function speechSentences(text) {
-      const cleaned = String(text || "").replace(/\s+/g, " ").trim();
-      if (!cleaned) return [];
-      const parts = cleaned.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) || [cleaned];
-      return parts.map((part) => part.trim()).filter(Boolean).flatMap((part) => {
-        if (part.length <= 220) return [part];
-        return part.split(/(?<=[,;:])\s+/).reduce((chunks, piece) => {
-          const last = chunks[chunks.length - 1];
-          if (last && (last + piece).length <= 220) chunks[chunks.length - 1] = `${last} ${piece}`;
-          else chunks.push(piece);
-          return chunks;
-        }, []);
+    function speechSentenceParts(text) {
+      const source = String(text || "");
+      const pattern = /[^.!?…]+[.!?…]+|[^.!?…]+$/g;
+      const parts = [];
+      let match;
+      while ((match = pattern.exec(source))) {
+        const raw = match[0];
+        const leading = (raw.match(/^\s*/) || [""])[0].length;
+        const value = raw.trim();
+        if (!value) continue;
+        let local = 0;
+        while (value.length - local > 220) {
+          let cut = value.lastIndexOf(" ", local + 220);
+          if (cut <= local) cut = local + 220;
+          const chunk = value.slice(local, cut);
+          const chunkLeading = (chunk.match(/^\s*/) || [""])[0].length;
+          if (chunk.trim()) parts.push({ text: chunk.trim(), start: match.index + leading + local + chunkLeading });
+          local = cut;
+        }
+        const rest = value.slice(local);
+        if (rest.trim()) {
+          const restLeading = (rest.match(/^\s*/) || [""])[0].length;
+          parts.push({ text: rest.trim(), start: match.index + leading + local + restLeading });
+        }
+      }
+      return parts;
+    }
+
+    function wrapSpeechWords(target) {
+      if (!target || target.querySelector(".speech-word")) return;
+      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      let offset = 0;
+      nodes.forEach((node) => {
+        const text = node.nodeValue || "";
+        const parent = node.parentElement;
+        if (!parent || parent.closest(".vocab, .gloss, .speech-word")) {
+          offset += text.length;
+          return;
+        }
+        const pattern = /[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu;
+        const matches = [...text.matchAll(pattern)];
+        if (!matches.length) {
+          offset += text.length;
+          return;
+        }
+        const fragment = document.createDocumentFragment();
+        let cursor = 0;
+        matches.forEach((match) => {
+          const start = offset + match.index;
+          if (match.index > cursor) fragment.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+          const span = document.createElement("span");
+          span.className = "speech-word";
+          span.dataset.speechStart = String(start);
+          span.dataset.speechEnd = String(start + match[0].length);
+          span.textContent = match[0];
+          fragment.appendChild(span);
+          cursor = match.index + match[0].length;
+        });
+        if (cursor < text.length) fragment.appendChild(document.createTextNode(text.slice(cursor)));
+        node.parentNode.replaceChild(fragment, node);
+        offset += text.length;
       });
+    }
+
+    function highlightSpeechWord(absolute, token) {
+      if (!speechState.target || token !== speechState.token) return;
+      const words = speechState.words || [];
+      let active = null;
+      for (const word of words) {
+        if (Number(word.dataset.speechStart) > absolute) break;
+        active = word;
+      }
+      speechState.activeWord?.classList.remove("speaking-word-active");
+      speechState.activeWord = active;
+      speechState.currentWordIndex = active ? words.indexOf(active) : -1;
+      active?.classList.add("speaking-word-active");
     }
 
     function speechControlsFor(target) {
@@ -188,6 +263,11 @@
       speechState.queue = [];
       speechState.index = 0;
       speechState.utterance = null;
+      speechState.activeWord?.classList.remove("speaking-word-active");
+      speechState.activeWord = null;
+      speechState.currentWordIndex = -1;
+      speechState.words = [];
+      speechState.target?.classList.remove("speaking-highlight");
       speechState.target = null;
       window.speechSynthesis.cancel();
       updateSpeechControls();
@@ -224,17 +304,24 @@
         speechState.active = false;
         speechState.paused = false;
         speechState.utterance = null;
+        speechState.activeWord?.classList.remove("speaking-word-active");
+        speechState.activeWord = null;
+        speechState.target?.classList.remove("speaking-highlight");
         updateSpeechControls();
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(speechState.queue[speechState.index]);
+      const sentence = speechState.queue[speechState.index];
+      const utterance = new SpeechSynthesisUtterance(sentence.text);
       utterance.lang = speechLocale();
       utterance.rate = getSpeechRate();
       if (speechState.voice) {
         try { utterance.voice = speechState.voice; } catch (error) { /* voice may be a plain test object */ }
       }
+      utterance.onstart = () => highlightSpeechWord(sentence.start, token);
       utterance.onboundary = (event) => {
+        if (event?.name && event.name !== "word") return;
         speechState.boundary = Number(event?.charIndex) || 0;
+        highlightSpeechWord(sentence.start + speechState.boundary, token);
       };
       utterance.onend = () => {
         if (token !== speechState.token) return;
@@ -255,9 +342,10 @@
         showToast(t("speech_unsupported"), "error");
         return;
       }
-      const text = String(target?.textContent || "").replace(/\s+/g, " ").trim();
-      const sentences = speechSentences(text);
+      const text = String(target?.textContent || "");
+      const sentences = speechSentenceParts(text);
       if (!sentences.length) return;
+      wrapSpeechWords(target);
       stopSpeech();
       const token = speechState.token + 1;
       speechState.token = token;
@@ -274,19 +362,59 @@
       speechState.index = 0;
       speechState.voice = voice;
       speechState.target = target;
+      speechState.words = [...target.querySelectorAll(".speech-word")];
+      speechState.activeWord = null;
       speakNext(token);
+    }
+
+    function pauseSpeech() {
+      if (!speechSupported() || !speechState.active || speechState.paused) return;
+      try { window.speechSynthesis.pause(); } catch (error) { /* pause unavailable */ }
+      speechState.paused = true;
+      updateSpeechControls();
+    }
+
+    function restartSpeechFromSavedWord() {
+      if (!speechState.active || !speechState.target) return;
+      const token = speechState.token;
+      const savedWord = speechState.words[speechState.currentWordIndex];
+      const savedStart = Number(savedWord?.dataset.speechStart);
+      const sentenceStart = Number(speechState.queue[speechState.index]?.start) || 0;
+      const start = Number.isFinite(savedStart) && savedStart >= 0 ? savedStart : sentenceStart;
+      const source = String(speechState.target.textContent || "");
+      const parts = speechSentenceParts(source.slice(start)).map((part) => ({ ...part, start: part.start + start }));
+      if (!parts.length) { stopSpeech(); return; }
+      const old = speechState.utterance;
+      if (old) { old.onend = null; old.onerror = null; }
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      } catch (error) { /* speech unavailable */ }
+      speechState.utterance = null;
+      speechState.queue = parts;
+      speechState.index = 0;
+      speechState.paused = false;
+      speechState.boundary = 0;
+      speakNext(token);
+    }
+
+    function resumeSpeech() {
+      if (!speechSupported() || !speechState.active || !speechState.paused) return;
+      const token = speechState.token;
+      speechState.paused = false;
+      try { window.speechSynthesis.resume(); } catch (error) { /* fallback below */ }
+      updateSpeechControls();
+      window.setTimeout(() => {
+        if (!speechState.active || token !== speechState.token) return;
+        const synth = window.speechSynthesis;
+        if (synth.paused || (!synth.speaking && !synth.pending)) restartSpeechFromSavedWord();
+      }, 260);
     }
 
     function toggleSpeechPause() {
       if (!speechSupported() || !speechState.active) return;
-      if (speechState.paused) {
-        window.speechSynthesis.resume();
-        speechState.paused = false;
-      } else {
-        window.speechSynthesis.pause();
-        speechState.paused = true;
-      }
-      updateSpeechControls();
+      if (speechState.paused) resumeSpeech();
+      else pauseSpeech();
     }
 
     document.addEventListener("click", (event) => {
@@ -573,6 +701,7 @@
       }
       closeTranslation();
       state.view = "stories";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("lessons");
       state.lesson = null;
       state.lessonId = null;
       state.story = null;
@@ -773,6 +902,7 @@
       }
       closeTranslation();
       state.view = "story";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("lessons");
       state.lesson = null;
       state.lessonId = null;
       state.story = story;

@@ -34,12 +34,24 @@
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
       });
+      document.querySelectorAll("[data-accent-setting]").forEach((button) => {
+        const active = button.dataset.accentSetting === state.settings.accent;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      document.querySelectorAll("[data-mode-setting]").forEach((button) => {
+        const active = button.dataset.modeSetting === state.settings.mode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
       syncLanguageUI();
     }
 
     function applySettings() {
-      const theme = THEME_IDS.includes(state.settings.theme) ? state.settings.theme : "glass";
+      const theme = THEME_IDS.includes(state.settings.theme) ? state.settings.theme : "dark";
       document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.accent = state.settings.accent === "emerald" ? "emerald" : "blue";
+      document.documentElement.dataset.mode = state.settings.mode === "advanced" ? "advanced" : "simple";
       document.body.classList.toggle("font-large", state.settings.font === "large");
       applyStaticTranslations();
       syncSettingsUI();
@@ -56,7 +68,7 @@
     let activeSettingsTab = "profile";
 
     function setSettingsTab(tab) {
-      const allowed = ["profile", "appearance", "system"];
+      const allowed = ["profile", "appearance", "system", "api"];
       activeSettingsTab = allowed.includes(tab) ? tab : "profile";
       const body = document.querySelector(".settings-body");
       if (body) body.dataset.settingsTab = activeSettingsTab;

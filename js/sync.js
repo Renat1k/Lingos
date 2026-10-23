@@ -395,6 +395,9 @@
       if (pending.render === "dashboard" && state.view === "dashboard") renderDashboard();
       else if (pending.render === "stories" && state.view === "stories") renderStoriesHub();
       else if (pending.render === "vocabulary" && state.view === "vocabulary") renderVocabularyHub();
+      else if (pending.render === "home" && state.view === "home") renderHome();
+      else if (pending.render === "practice" && state.view === "practice") renderPracticeHub();
+      else if (pending.render === "progress" && state.view === "progress") renderProgressHub();
       if (pending.render && state.view !== "lesson" && state.view !== "story") {
         window.requestAnimationFrame(() => window.scrollTo(0, previousScroll));
       }

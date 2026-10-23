@@ -1868,7 +1868,8 @@
       const create = event.target.closest("[data-create-lesson]");
       if (create) {
         event.preventDefault();
-        openLessonCreateModal();
+        if (state.settings?.mode !== "advanced" && typeof openSimpleLessonModal === "function") openSimpleLessonModal();
+        else openLessonCreateModal();
         return;
       }
       if (event.target.closest("[data-create-with-ai]")) {

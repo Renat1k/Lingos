@@ -28,7 +28,7 @@
       activeBlock: 0,
       toastTimer: null,
       scrollCleanup: null,
-      settings: { font: "normal", language: "en", theme: "glass", uiLanguage: "ru", updated_at: "" },
+      settings: { font: "normal", language: "en", theme: "dark", accent: "blue", uiLanguage: "ru", mode: "simple", level: "", updated_at: "" },
       geminiKey: "",
       languageFilter: "active",
       courseFlagDraft: null,
@@ -182,14 +182,42 @@
       return languageKey("imported_stories");
     }
 
+    function browserUiLanguage() {
+      const browser = String(navigator.language || navigator.languages?.[0] || "en").toLowerCase();
+      if (browser.startsWith("ru")) return "ru";
+      if (browser.startsWith("da")) return "da";
+      if (browser.startsWith("tr")) return "tr";
+      return "en";
+    }
+
+    function hasAdvancedWorkspaceData() {
+      try {
+        if (readJSON(CUSTOM_LANGUAGES_KEY, []).length) return true;
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+          const key = window.localStorage.key(index);
+          if (key && /_imported_(lessons|stories)$/.test(key) && readJSON(key, []).length) return true;
+        }
+      } catch (error) { /* storage may be unavailable */ }
+      return false;
+    }
+
     function loadSettings() {
       const stored = readJSON(UI_SETTINGS_KEY, null);
       const active = activeLanguageCodes();
+      const autoMode = hasAdvancedWorkspaceData() ? "advanced" : "simple";
+      const legacyDark = ["glass", "cyber", "hacker", "nordic"];
+      const preferredTheme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      const storedTheme = stored?.theme === "light" || stored?.theme === "dark"
+        ? stored.theme
+        : legacyDark.includes(stored?.theme) ? "dark" : preferredTheme;
       state.settings = {
         font: stored && stored.font === "large" ? "large" : "normal",
         language: stored && active.includes(stored.language) ? stored.language : (active[0] || "en"),
-        theme: stored && THEME_IDS.includes(stored.theme) ? stored.theme : "glass",
-        uiLanguage: stored && UI_LANGUAGES[stored.uiLanguage] ? stored.uiLanguage : "ru",
+        theme: storedTheme,
+        accent: stored?.accent === "emerald" ? "emerald" : "blue",
+        uiLanguage: stored && UI_LANGUAGES[stored.uiLanguage] ? stored.uiLanguage : browserUiLanguage(),
+        mode: stored?.mode === "simple" && !hasAdvancedWorkspaceData() ? "simple" : (stored?.mode === "advanced" || autoMode === "advanced" ? "advanced" : "simple"),
+        level: stored && ["A1", "A2", "B1"].includes(stored.level) ? stored.level : "",
         updated_at: String(stored?.updated_at || "")
       };
       try {

@@ -8,6 +8,30 @@
       return [];
     }
 
+    function lastOpenedKey() {
+      return languageKey("last_opened");
+    }
+
+    function rememberLessonPosition(lessonId, blockIndex = 0) {
+      const id = Number(lessonId);
+      if (!id) return;
+      writeJSON(lastOpenedKey(), {
+        lessonId: id,
+        blockIndex: Math.max(0, Number(blockIndex) || 0),
+        at: new Date().toISOString()
+      });
+    }
+
+    function getLastOpenedLesson() {
+      const stored = readJSON(lastOpenedKey(), null);
+      if (!stored || !stored.lessonId) return null;
+      return {
+        lessonId: Number(stored.lessonId),
+        blockIndex: Math.max(0, Number(stored.blockIndex) || 0),
+        at: String(stored.at || "")
+      };
+    }
+
     function getLessonDiscovered(lessonId) {
       const stored = readJSON(discoveredKey(lessonId), []);
       return Array.isArray(stored) ? stored : [];
@@ -576,6 +600,7 @@
       }
       closeTranslation();
       state.view = "dashboard";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("lessons");
       state.lesson = null;
       state.lessonId = null;
       state.story = null;
@@ -1258,8 +1283,11 @@
       }
       closeTranslation();
       state.view = "lesson";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("lessons");
       state.lesson = lesson;
       state.lessonId = Number(lesson.id);
+      const previousOpen = getLastOpenedLesson();
+      if (!previousOpen || previousOpen.lessonId !== Number(lesson.id)) rememberLessonPosition(lesson.id, 0);
       state.story = null;
       state.storyId = null;
       state.activeBlock = 0;
@@ -1271,6 +1299,7 @@
       app.innerHTML = `
         ${renderHero(lesson, blocks, practiceIndex)}
         <div class="shell">
+          ${renderLearningPath(lesson)}
           <div class="lesson-layout">
             ${renderToc(lesson, blocks)}
             <article class="lesson-content" id="lesson" aria-label="${escapeHtml(lesson.title || "Урок")}">
@@ -1282,7 +1311,7 @@
 
       const section = (lesson.module || "lesson").split("//")[0].trim().toLowerCase() || "lesson";
       topbarContext.textContent = `lesson_${pad(lesson.id || 1)} / ${section}`;
-      progressValue.textContent = "00";
+      progressValue.textContent = "";
       topProgressBar.style.width = "0%";
       const topbarProgress = document.getElementById("topbarProgress");
       if (topbarProgress) topbarProgress.setAttribute("aria-label", "Глубина прохождения урока");
@@ -1299,6 +1328,13 @@
       initQuizzes(lesson);
       state.scrollCleanup = setupScrollTracking();
       scrollToTopInstant();
+      const resumeBlock = Number(window.sessionStorage.getItem("lingua_resume_block"));
+      if (Number.isFinite(resumeBlock) && resumeBlock >= 0) {
+        window.sessionStorage.removeItem("lingua_resume_block");
+        window.setTimeout(() => {
+          document.getElementById(`block-${resumeBlock + 1}`)?.scrollIntoView({ block: "start", behavior: "auto" });
+        }, 80);
+      }
     }
 
     /* ---------- writing practice ---------- */
@@ -1648,6 +1684,7 @@
 
         if (active !== state.activeBlock) {
           state.activeBlock = active;
+          rememberLessonPosition(state.lessonId, active);
           tocLinks.forEach((link) => {
             const index = Number(link.dataset.tocIndex);
             const isActive = index === active;
@@ -1679,4 +1716,248 @@
         window.removeEventListener("resize", onScroll);
         if (rafId) window.cancelAnimationFrame(rafId);
       };
+    }
+
+    /* ---------- home / practice / progress ---------- */
+    function homeGreeting() {
+      const hour = new Date().getHours();
+      const key = hour < 12 ? "home_morning" : hour < 18 ? "home_day" : "home_evening";
+      const name = String(state.profile?.nickname || state.profile?.name || "").trim();
+      return name ? t("home_greeting_name", { greeting: t(key), name }) : t(key);
+    }
+
+    function homeWeakCount() {
+      return getQuizAttempts().reduce((sum, attempt) => sum + (Array.isArray(attempt.wrong) ? attempt.wrong.length : 0), 0);
+    }
+
+    function homeHintDismissed() {
+      return Boolean(readJSON("lingua_home_hint_dismissed", false));
+    }
+
+    function renderHomeGoalCard(kind, label, count, href, action) {
+      const content = action
+        ? `<button class="home-goal-card" type="button" ${action}>`
+        : `<a class="home-goal-card" href="${escapeHtml(href)}">`;
+      const close = action ? "</button>" : "</a>";
+      return `${content}
+        <span class="home-goal-icon" aria-hidden="true">${kind === "review" ? "🔁" : kind === "stories" ? "📖" : "📚"}</span>
+        <strong>${escapeHtml(label)}</strong>
+        ${count ? `<small>${escapeHtml(String(count))}</small>` : ""}
+      ${close}`;
+    }
+
+
+    function learningPathSteps(lesson) {
+      const blocks = getLessonBlocks(lesson);
+      const find = (types) => blocks.findIndex((block) => types.includes(block.type));
+      return [
+        { key: "intro", label: t("path_intro"), target: "#lesson", index: 0 },
+        { key: "explain", label: t("path_explain"), target: find(["theory"]), index: find(["theory"]) },
+        { key: "examples", label: t("path_examples"), target: find(["theory", "reading_heavy"]), index: find(["theory", "reading_heavy"]) },
+        { key: "practice", label: t("path_practice"), target: find(["quiz", "dialogue"]), index: find(["quiz", "dialogue"]) },
+        { key: "sentence", label: t("path_sentence"), target: find(["practice_write"]), index: find(["practice_write"]) },
+        { key: "check", label: t("path_check"), target: find(["quiz"]), index: find(["quiz"]) },
+        { key: "review", label: t("path_review"), target: -1, index: -1 }
+      ].map((step) => ({ ...step, available: step.index >= 0 || step.key === "intro" || step.key === "review" }));
+    }
+
+    function renderLearningPath(lesson, compact = false) {
+      const steps = learningPathSteps(lesson);
+      return `
+        <nav class="learning-path${compact ? " is-compact" : ""}" aria-label="${escapeHtml(t("path_title"))}">
+          ${compact ? "" : `<span class="learning-path-title">${escapeHtml(t("path_title"))}</span>`}
+          <ol>
+            ${steps.map((step, index) => {
+              const content = `<span class="path-number">${index + 1}</span><span>${escapeHtml(step.label)}</span>${compact ? "" : `<small>${escapeHtml(step.available ? t("path_available") : t("path_missing"))}</small>`}`;
+              if (step.key === "review") {
+                return `<li><button class="${step.available ? "" : "is-missing"}" type="button" data-open-review>${content}</button></li>`;
+              }
+              if (step.key === "intro") {
+                const introHref = compact ? `#lesson-${Number(lesson.id)}` : "#block-1";
+                const introResume = compact ? ` data-resume-block="0"` : "";
+                return `<li><a href="${introHref}"${introResume} ${compact ? "" : `aria-label="${escapeHtml(step.label)}"`}>${content}</a></li>`;
+              }
+              const href = compact ? `#lesson-${Number(lesson.id)}` : (step.available ? `#block-${step.index + 1}` : "#block-1");
+              const resume = compact && step.available ? ` data-resume-block="${Math.max(0, step.index)}"` : "";
+              return `<li><a class="${step.available ? "" : "is-missing"}" href="${href}"${resume} ${step.available ? "" : `aria-disabled="true"`}>${content}</a></li>`;
+            }).join("")}
+          </ol>
+          ${compact ? "" : `<p class="learning-path-note">${escapeHtml(t("path_review_hint"))}</p>`}
+        </nav>`;
+    }
+
+    function renderHome() {
+      stopSpeech();
+      if (typeof state.scrollCleanup === "function") { state.scrollCleanup(); state.scrollCleanup = null; }
+      closeTranslation();
+      state.view = "home";
+      state.lesson = null; state.lessonId = null; state.story = null; state.storyId = null;
+      state.backTarget = "#home";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("home");
+
+      const stats = getCourseStats();
+      const visibleLessons = stats.cards.map((item) => item.lesson);
+      const last = getLastOpenedLesson();
+      const lastCard = last ? stats.cards.find((item) => Number(item.lesson.id) === last.lessonId) : null;
+      const nextCard = lastCard || stats.cards.find((item) => item.metrics.percent > 0 && item.metrics.percent < 100)
+        || stats.cards.find((item) => item.metrics.percent === 0) || stats.cards[0] || null;
+      const hasProgress = stats.cards.some((item) => item.metrics.percent > 0);
+      const primary = lastCard || (!hasProgress ? null : nextCard);
+      const pathLesson = primary?.lesson || nextCard?.lesson || null;
+      const primaryId = primary?.lesson.id;
+      const blockIndex = primary ? Math.min(last?.blockIndex || 0, Math.max(0, getLessonBlocks(primary.lesson).length - 1)) : 0;
+      const due = typeof getDueReviewCount === "function" ? getDueReviewCount() : 0;
+      const totalWords = state.vocab.length;
+      const newWords = state.vocab.filter((word) => (Number(word.box_level) || 1) <= 1).length;
+      const learnedWords = state.vocab.filter((word) => (Number(word.box_level) || 1) >= 3).length;
+      const weak = homeWeakCount();
+      const stories = typeof getStoriesStats === "function" ? getStoriesStats() : { total: 0, readCount: 0 };
+      const options = stats.cards.filter((item) => Number(item.lesson.id) !== Number(primaryId)).slice(0, 2);
+      const optionCards = options.map((item, index) => renderHomeGoalCard(
+        "lesson",
+        item.lesson.title || t("nav_lessons"),
+        item.metrics.percent > 0 ? `${item.metrics.percent}%` : "",
+        `#lesson-${Number(item.lesson.id)}`
+      )).join("");
+      const extraOptions = stories.total
+        ? renderHomeGoalCard("stories", t("home_option_stories"), stories.readCount ? `${stories.readCount}/${stories.total}` : "", "#stories")
+        : "";
+      const reviewRatio = totalWords ? Math.round(((totalWords - due) / totalWords) * 100) : 0;
+      const hint = homeHintDismissed() ? "" : `
+        <aside class="home-hint" aria-labelledby="homeHintTitle">
+          <button class="home-hint-close" type="button" data-dismiss-home-hint aria-label="${escapeHtml(t("home_hint_dismiss"))}">×</button>
+          <strong id="homeHintTitle">${escapeHtml(t("home_hint_title"))}</strong>
+          <ul>
+            <li>${escapeHtml(t("home_hint_1"))}</li>
+            <li>${escapeHtml(t("home_hint_2"))}</li>
+            <li>${escapeHtml(t("home_hint_3"))}</li>
+          </ul>
+        </aside>`;
+      const tiles = [
+        due > 0 ? { value: due, label: t("tile_due"), kind: "review" } : null,
+        newWords > 0 ? { value: newWords, label: t("tile_new"), kind: "new" } : null,
+        learnedWords > 0 ? { value: learnedWords, label: t("tile_learned"), kind: "learned" } : null,
+        weak > 0 ? { value: weak, label: t("tile_weak"), kind: "weak" } : null
+      ].filter(Boolean);
+
+      app.innerHTML = `
+        <section class="home-page" aria-labelledby="homeTitle">
+          <header class="home-greeting">
+            <span class="home-kicker">${escapeHtml(t("nav_home"))}</span>
+            <h1 id="homeTitle">${escapeHtml(homeGreeting())}</h1>
+            <p>${escapeHtml(primary ? t("home_continue_hint") : t("home_start_body"))}</p>
+          </header>
+
+          ${primary ? `
+            <article class="home-continue">
+              <div class="home-continue-copy">
+                <span class="home-kicker">${escapeHtml(t("home_continue"))}</span>
+                <h2>${escapeHtml(primary.lesson.title || t("nav_lessons"))}</h2>
+                <p>${escapeHtml(t("home_block", { n: blockIndex + 1 }))}${primary.metrics.percent ? ` · ${primary.metrics.percent}%` : ""}</p>
+                <a class="btn btn-primary" href="#lesson-${Number(primary.lesson.id)}" data-resume-block="${blockIndex}">${escapeHtml(t("home_continue"))} ${icon("arrow-right")}</a>
+              </div>
+              ${primary.metrics.percent ? `<div class="home-continue-ring" style="--p:${primary.metrics.percent}"><strong>${primary.metrics.percent}%</strong></div>` : ""}
+            </article>
+          ` : `
+            <article class="home-start">
+              <h2>${escapeHtml(visibleLessons.length ? t("home_start") : t("home_empty_title"))}</h2>
+              <p>${escapeHtml(visibleLessons.length ? t("home_start_body") : t("home_empty_body"))}</p>
+              ${visibleLessons.length
+                ? `<a class="btn btn-primary" href="#lesson-${Number(visibleLessons[0].id)}" data-resume-block="0">${escapeHtml(t("home_start"))} ${icon("arrow-right")}</a>`
+                : `<button class="btn btn-primary" type="button" data-create-lesson>${icon("plus")} ${escapeHtml(t("home_create"))}</button>`}
+            </article>
+          `}
+
+          <div class="home-options">
+            ${optionCards}${extraOptions || renderHomeGoalCard("stories", t("home_option_vocab"), totalWords ? String(totalWords) : "", "#vocabulary")}
+          </div>
+          ${pathLesson ? renderLearningPath(pathLesson, true) : ""}
+
+          ${due > 0 ? `
+            <article class="home-review-card">
+              <div>
+                <span class="home-kicker">${escapeHtml(t("practice_review"))}</span>
+                <h2>${escapeHtml(t("home_review"))}</h2>
+                <p>${escapeHtml(t("home_review_body", { n: due }))}</p>
+                <small>${escapeHtml(t("home_review_progress", { done: totalWords - due, total: totalWords }))}</small>
+              </div>
+              <div class="home-review-side">
+                <div class="home-review-progress" style="--p:${reviewRatio}"><strong>${reviewRatio}%</strong></div>
+                <button class="btn btn-primary" type="button" data-open-review>${escapeHtml(t("home_review_cta"))}</button>
+              </div>
+            </article>
+          ` : ""}
+
+          ${tiles.length ? `
+            <section class="home-tiles" aria-labelledby="homeTilesTitle">
+              <h2 id="homeTilesTitle" class="sr-only">${escapeHtml(t("home_tiles"))}</h2>
+              ${tiles.map((tile) => `<button class="home-tile" type="button" data-home-tile="${tile.kind}"><strong>${tile.value}</strong><span>${escapeHtml(tile.label)}</span></button>`).join("")}
+            </section>
+          ` : ""}
+
+          ${hint}
+        </section>
+      `;
+      topbarContext.textContent = "home / start";
+      progressValue.textContent = hasProgress ? pad(stats.completion) : "";
+      topProgressBar.style.width = `${hasProgress ? stats.completion : 0}%`;
+      backToLessons.hidden = true;
+      document.title = `LINGUA/OS — ${t("nav_home")}`;
+      scrollToTopInstant();
+    }
+
+    function renderPracticeHub() {
+      stopSpeech();
+      if (typeof state.scrollCleanup === "function") { state.scrollCleanup(); state.scrollCleanup = null; }
+      state.view = "practice"; state.lesson = null; state.lessonId = null; state.story = null; state.storyId = null;
+      state.backTarget = "#practice";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("practice");
+      const due = typeof getDueReviewCount === "function" ? getDueReviewCount() : 0;
+      const weak = homeWeakCount();
+      const writing = getVisibleLessons().flatMap((lesson) => getLessonBlocks(lesson)
+        .map((block, index) => ({ lesson, block, index })).filter((item) => item.block.type === "practice_write")).slice(0, 3);
+      app.innerHTML = `
+        <section class="practice-page" aria-labelledby="practiceTitle">
+          <header class="page-heading"><span class="home-kicker">${escapeHtml(t("nav_practice"))}</span><h1 id="practiceTitle">${escapeHtml(t("practice_title"))}</h1><p>${escapeHtml(t("practice_subtitle"))}</p></header>
+          <div class="practice-cards">
+            <article class="practice-card"><span aria-hidden="true">🔁</span><h2>${escapeHtml(t("practice_review"))}</h2><p>${escapeHtml(due ? t("home_review_body", { n: due }) : t("practice_review_empty"))}</p>${due ? `<button class="btn btn-primary" type="button" data-open-review>${escapeHtml(t("home_review_cta"))}</button>` : `<a class="btn btn-secondary" href="#vocabulary">${escapeHtml(t("practice_go_vocab"))}</a>`}</article>
+            <article class="practice-card"><span aria-hidden="true">📝</span><h2>${escapeHtml(t("practice_tests"))}</h2><p>${escapeHtml(weak ? t("weak_errors", { n: weak }) : t("practice_weak_empty"))}</p><button class="btn btn-secondary" type="button" data-scroll-tests>${escapeHtml(t("practice_go_tests"))}</button></article>
+            <article class="practice-card"><span aria-hidden="true">✍️</span><h2>${escapeHtml(t("practice_writing"))}</h2><p>${writing.length ? writing.map((item) => escapeHtml(item.lesson.title)).join(" · ") : escapeHtml(t("practice_review_empty"))}</p>${writing[0] ? `<a class="btn btn-secondary" href="#lesson-${Number(writing[0].lesson.id)}">${escapeHtml(t("progress_start"))}</a>` : ""}</article>
+          </div>
+          <div class="practice-tests">${renderTestsPanel()}</div>
+        </section>`;
+      topbarContext.textContent = "practice / review";
+      progressValue.textContent = "";
+      topProgressBar.style.width = "0%";
+      backToLessons.hidden = true;
+      document.title = `LINGUA/OS — ${t("practice_title")}`;
+      scrollToTopInstant();
+    }
+
+    function renderProgressHub() {
+      stopSpeech();
+      if (typeof state.scrollCleanup === "function") { state.scrollCleanup(); state.scrollCleanup = null; }
+      state.view = "progress"; state.lesson = null; state.lessonId = null; state.story = null; state.storyId = null;
+      state.backTarget = "#progress";
+      if (typeof setActiveAppSection === "function") setActiveAppSection("progress");
+      const stats = getCourseStats();
+      const stories = typeof getStoriesStats === "function" ? getStoriesStats() : { total: 0, readCount: 0 };
+      const attempts = getQuizAttempts();
+      const hasAny = stats.completion > 0 || state.vocab.length > 0 || stories.readCount > 0 || attempts.length > 0;
+      app.innerHTML = `
+        <section class="progress-page" aria-labelledby="progressTitle">
+          <header class="page-heading"><span class="home-kicker">${escapeHtml(t("nav_progress"))}</span><h1 id="progressTitle">${escapeHtml(t("progress_title"))}</h1><p>${escapeHtml(t("progress_subtitle"))}</p></header>
+          ${hasAny ? `<div class="progress-grid">
+            <article class="progress-card"><span>${escapeHtml(t("progress_lessons"))}</span><strong>${stats.cards.filter((item) => item.metrics.percent > 0).length}<small>/${stats.cards.length}</small></strong><div class="progress-bar"><span style="width:${stats.completion}%"></span></div><p>${stats.completion}%</p></article>
+            <article class="progress-card"><span>${escapeHtml(t("progress_words"))}</span><strong>${stats.words}<small>/${state.vocab.length}</small></strong><p>${escapeHtml(t("words_learned"))}</p></article>
+            <article class="progress-card"><span>${escapeHtml(t("progress_stories"))}</span><strong>${stories.readCount}<small>/${stories.total}</small></strong><p>${escapeHtml(t("read"))}</p></article>
+            <article class="progress-card"><span>${escapeHtml(t("progress_quizzes"))}</span><strong>${stats.quizzes}<small>/${stats.quizzesTotal}</small></strong><p>${escapeHtml(t("quizzes_passed"))}</p></article>
+          </div>` : `<div class="home-start"><h2>${escapeHtml(t("progress_empty"))}</h2><a class="btn btn-primary" href="#dashboard">${escapeHtml(t("progress_start"))}</a></div>`}
+        </section>`;
+      topbarContext.textContent = "progress / real-data";
+      progressValue.textContent = hasAny ? pad(stats.completion) : "";
+      topProgressBar.style.width = `${hasAny ? stats.completion : 0}%`;
+      backToLessons.hidden = true;
+      document.title = `LINGUA/OS — ${t("progress_title")}`;
+      scrollToTopInstant();
     }
